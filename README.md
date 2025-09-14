@@ -1,6 +1,6 @@
 # Ideal_Student_AI
 First Dive into NLP<br>
-Currently using Langchain, running Local LLMs<br>
+Currently using Langchain, chromadb, Langchain_community libraries, running Local LLMs and embedding models<br>
 # Features:-
 - All documents will be supported<br>
 - Web Interface<br>
