@@ -77,7 +77,7 @@ collection = chroma_client.get_or_create_collection(name="chroma")
 embedder = SentenceTransformer("all-MiniLM-L6-v2")
 
 # LLM
-llm = ChatOllama(model="tinyllama:1.1b")
+llm = ChatOllama(model="llama2:7b")
 
 # Text splitter for chunking
 splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=100)
