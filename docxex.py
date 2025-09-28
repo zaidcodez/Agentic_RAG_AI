@@ -6,7 +6,7 @@ import chromadb
 
 DATA_PATH = r"data"
 CHROMA_PATH = r"chroma_db"
-GLOBAL = "**/*.docx"
+GLOBAL = "**/*.docx","**/*.doc"
 
 chroma_client = chromadb.PersistentClient(path=CHROMA_PATH)
 
