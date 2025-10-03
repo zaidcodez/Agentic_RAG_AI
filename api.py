@@ -1,65 +1,11 @@
-# import chromadb
-# from dotenv import load_dotenv
-# from langchain_ollama import ChatOllama
-# from langchain.schema import HumanMessage, SystemMessage
-
-# load_dotenv()
-
-# # Paths
-# DATA_PATH = r"data"
-# CHROMA_PATH = r"chroma_db"
-
-# # ChromaDB client
-# chroma_client = chromadb.PersistentClient(path=CHROMA_PATH)
-# collection = chroma_client.get_or_create_collection(name="chroma")
-
-# # User query
-# user_query = input("Hello\n\n")
-
-# results = collection.query(
-#     query_texts=[user_query],
-#     n_results=4
-# )
-
-# # Extract retrieved docs
-# retrieved_docs = results["documents"]
-
-# # Build system prompt
-# system_prompt = f"""
-# You are a helpful assistant. If met with a greeting, you reply with a greeting.
-# You only answer based on the knowledge I'm providing you. 
-# You don't use internal knowledge and you don't make things up.
-# If you don't know the answer, just say: I don't know.
-# --------------------
-# The data:
-# {retrieved_docs}
-# """
-
-# # Initialize Ollama TinyLlama model
-# llm = ChatOllama(model="tinyllama:1.1b")
-
-# # Run conversation
-# response = llm([
-#     SystemMessage(content=system_prompt),
-#     HumanMessage(content=user_query)
-# ])
-
-# print("\n\n---------------------\n\n")
-# print(response.content)
-
-
-############################################
-##GPT RESPONSE BELOW##, ABOVE IS MY CODE
-#############################################
-
 import os
 import chromadb
 from dotenv import load_dotenv
-from langchain_ollama import ChatOllama
 from langchain.schema import HumanMessage, SystemMessage
 from langchain_community.document_loaders import Docx2txtLoader, PyPDFLoader, UnstructuredPowerPointLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from sentence_transformers import SentenceTransformer
+from langchain_nvidia_ai_endpoints import ChatNVIDIA
 
 # ----------------------------
 # Setup
@@ -69,6 +15,9 @@ load_dotenv()
 DATA_PATH = r"data"
 CHROMA_PATH = r"chroma_db"
 
+# Get API key from env
+API_KEY = os.getenv("NVIDIA_API_KEY")
+
 # ChromaDB client
 chroma_client = chromadb.PersistentClient(path=CHROMA_PATH)
 collection = chroma_client.get_or_create_collection(name="chroma")
@@ -76,8 +25,14 @@ collection = chroma_client.get_or_create_collection(name="chroma")
 # Embedding model
 embedder = SentenceTransformer("all-MiniLM-L6-v2")
 
-# LLM
-llm = ChatOllama(model="llama2:7b")
+# NVIDIA LLM client
+llm = ChatNVIDIA(
+    model="deepseek-ai/deepseek-r1",
+    api_key=API_KEY,
+    temperature=0.6,
+    top_p=0.7,
+    max_tokens=4096,
+)
 
 # Text splitter for chunking
 splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=100)
@@ -138,6 +93,10 @@ def answer_query(query):
         SystemMessage(content=system_prompt),
         HumanMessage(content=query)
     ])
+
+    # Handle reasoning output if available
+    if response.additional_kwargs and "reasoning_content" in response.additional_kwargs:
+        print("🧠 Reasoning:\n", response.additional_kwargs["reasoning_content"])
 
     return response.content
 
