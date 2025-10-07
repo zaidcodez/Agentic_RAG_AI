@@ -80,6 +80,7 @@ def answer_query(query):
         system_prompt = f"""
         You are a helpful assistant.
         You can chat naturally with the user.
+        When documents are uploaded, only then refer to them, otherwise do not bring up knowledge from uploaded documents.
         If relevant, use the knowledge I'm providing you to answer.
         If the docs don't cover the question, feel free to answer normally.
         --------------------
@@ -101,17 +102,8 @@ def answer_query(query):
     return response.content
 
 # ----------------------------
-# Chat loop
+# Disabled terminal chat (handled by Flask now)
 # ----------------------------
-print("🤖 Tutor AI ready! Type your questions, or upload files with: upload <path>")
-while True:
-    user_input = input("\n> ")
-    
-    if user_input.lower() == "quit":
-        break
-    elif user_input.startswith("upload "):
-        file_path = user_input.split("upload ", 1)[1].strip()
-        load_and_store(file_path)
-    else:
-        answer = answer_query(user_input)
-        print(f"\nAI: {answer}")
+if __name__ == "__main__":
+
+    print("✅ API module loaded. Flask will handle all interactions.")

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tutor AI Chat</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f2f2f2;
+            margin: 0;
+            padding: 0;
+        }
+
+        #chat-container {
+            width: 60%;
+            margin: 40px auto;
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        #messages {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 5px;
+            background: #fafafa;
+        }
+
+        .msg {
+            margin: 10px 0;
+        }
+
+        .user {
+            text-align: right;
+            color: blue;
+        }
+
+        .ai {
+            text-align: left;
+            color: green;
+        }
+
+        #input-area {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+        }
+
+        #query {
+            flex: 1;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #aaa;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            background: #007bff;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="chat-container">
+        <h2>🧔 Mulla AI ( very islamic )</h2>
+        <div id="messages"></div>
+
+        <div id="input-area">
+            <input id="query" type="text" placeholder="Type your question..." />
+            <button id="sendBtn">Send</button>
+        </div>
+
+        <form id="uploadForm" enctype="multipart/form-data" style="margin-top:15px;">
+            <input type="file" id="fileInput" name="file" />
+            <button type="submit">Upload File</button>
+        </form>
+    </div>
+
+    <script>
+        const messagesDiv = document.getElementById("messages");
+        const queryInput = document.getElementById("query");
+        const sendBtn = document.getElementById("sendBtn");
+
+        function appendMessage(text, sender) {
+            const msg = document.createElement("div");
+            msg.className = `msg ${sender}`;
+            msg.textContent = text;
+            messagesDiv.appendChild(msg);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const query = queryInput.value.trim();
+            if (!query) return;
+            appendMessage("You: " + query, "user");
+            queryInput.value = "";
+
+            try {
+                const res = await fetch("http://127.0.0.1:5000/api/chat", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ query })
+                });
+
+                const data = await res.json();
+                if (data.response) {
+                    appendMessage("AI: " + data.response, "ai");
+                } else if (data.error) {
+                    appendMessage("⚠️ Error: " + data.error, "ai");
+                }
+            } catch (err) {
+                appendMessage("⚠️ Server not responding. Is app.py running?", "ai");
+            }
+        }
+
+        // Allow pressing Enter to send
+        queryInput.addEventListener("keypress", (e) => {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        sendBtn.addEventListener("click", sendMessage);
+
+        document.getElementById("uploadForm").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const file = document.getElementById("fileInput").files[0];
+            if (!file) return alert("Select a file first!");
+
+            const formData = new FormData();
+            formData.append("file", file);
+
+            try {
+                const res = await fetch("http://127.0.0.1:5000/api/upload", {
+                    method: "POST",
+                    body: formData
+                });
+
+                const data = await res.json();
+                alert(data.message || data.error);
+            } catch (err) {
+                alert("Server not responding. Make sure app.py is running.");
+            }
+        });
+    </script>
+</body>
+
+</html>
