@@ -27,7 +27,7 @@ embedder = SentenceTransformer("all-MiniLM-L6-v2")
 
 # NVIDIA LLM client
 llm = ChatNVIDIA(
-    model="deepseek-ai/deepseek-r1",
+    model="deepseek-ai/deepseek-r1-0528",
     api_key=API_KEY,
     temperature=0.6,
     top_p=0.7,
