@@ -11,7 +11,7 @@ def serve_html():
     # Serve the frontend HTML
     return send_from_directory(".", "index.html")
 
-@app.route("/api/chat", methods=["POST"])
+@app.route("/llm/chat", methods=["POST"])
 def chat():
     data = request.get_json()
     query = data.get("query", "")
@@ -21,7 +21,7 @@ def chat():
     response = answer_query(query)
     return jsonify({"response": response})
 
-@app.route("/api/upload", methods=["POST"])
+@app.route("/llm/upload", methods=["POST"])
 def upload():
     if "file" not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
