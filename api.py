@@ -78,10 +78,10 @@ def answer_query(query):
 
     if retrieved_docs and any(retrieved_docs[0]):  # check if docs exist
         system_prompt = f"""
-        You are a helpful assistant.
-        You can chat naturally with the user.
-        When documents are uploaded, only then refer to them, otherwise do not bring up knowledge from uploaded documents.
-        If relevant, use the knowledge I'm providing you to answer.
+        You are a helpful assistant. 
+        You can chat naturally with the user. 
+        When documents are uploaded, only then refer to them, otherwise do not bring up knowledge from uploaded documents. 
+        If relevant, use the knowledge I'm providing you to answer. 
         If the docs don't cover the question, feel free to answer normally.
         --------------------
         The data:
