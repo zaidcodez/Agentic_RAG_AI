@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-from llm import load_and_store, answer_query
+from api import load_and_store, answer_query
 import os
 
 app = Flask(__name__, static_folder=".", static_url_path="")
@@ -11,7 +11,7 @@ def serve_html():
     # Serve the frontend HTML
     return send_from_directory(".", "index.html")
 
-@app.route("/llm/chat", methods=["POST"])
+@app.route("/api/chat", methods=["POST"])
 def chat():
     data = request.get_json()
     query = data.get("query", "")
@@ -21,7 +21,7 @@ def chat():
     response = answer_query(query)
     return jsonify({"response": response})
 
-@app.route("/llm/upload", methods=["POST"])
+@app.route("/api/upload", methods=["POST"])
 def upload():
     if "file" not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
