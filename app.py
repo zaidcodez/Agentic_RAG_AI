@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-from api import load_and_store, answer_query
+from llm import load_and_store, answer_query
 import os
 
 app = Flask(__name__, static_folder=".", static_url_path="")
