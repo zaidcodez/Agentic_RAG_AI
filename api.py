@@ -6,6 +6,7 @@ from langchain_community.document_loaders import Docx2txtLoader, PyPDFLoader, Un
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from sentence_transformers import SentenceTransformer
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
+from duckduckgo_search import DDGS  # ✅ For web search fallback
 
 # ----------------------------
 # Setup
@@ -67,43 +68,94 @@ def load_and_store(file_path):
     print(f"✅ Added {len(chunks)} chunks from {file_path}")
 
 # ----------------------------
+# Helper: Detect if any docs exist in ChromaDB
+# ----------------------------
+def has_uploaded_docs():
+    try:
+        count = len(collection.get(include=["documents"])["documents"])
+        return count > 0
+    except Exception:
+        return False
+
+# ----------------------------
 # Helper: Answer query
 # ----------------------------
 def answer_query(query):
-    results = collection.query(
-        query_texts=[query],
-        n_results=4
-    )
-    retrieved_docs = results["documents"]
+    query_lower = query.strip().lower()
 
-    if retrieved_docs and any(retrieved_docs[0]):  # check if docs exist
+    # Step 0: If user says something casual, stay neutral and short
+    if query_lower in ["hi", "hello", "hey", "what’s up", "yo", "good morning", "good evening"]:
+        return "Hey there! 😊 How can I help you today?"
+
+    # Step 1: Check if any documents exist at all
+    docs_exist = has_uploaded_docs()
+
+    # Step 2: If docs exist, try local search
+    retrieved_docs = []
+    if docs_exist:
+        results = collection.query(
+            query_texts=[query],
+            n_results=4
+        )
+        retrieved_docs = results.get("documents", [])
+
+    has_local_data = retrieved_docs and any(retrieved_docs[0])
+
+    if has_local_data:
+        # Found relevant local chunks
         system_prompt = f"""
-        You are a helpful assistant. 
-        You can chat naturally with the user. 
-        When documents are uploaded, only then refer to them, otherwise do not bring up knowledge from uploaded documents. 
-        If relevant, use the knowledge I'm providing you to answer. 
-        If the docs don't cover the question, feel free to answer normally.
+        You are a helpful assistant.
+        Use the following uploaded document data if relevant to answer accurately.
+        If the question is casual or unrelated to the documents, reply naturally and concisely.
         --------------------
-        The data:
         {retrieved_docs}
         """
     else:
-        system_prompt = "You are a helpful assistant. Chat naturally with the user."
+        # Step 3: If no local data or no docs yet, try web search for factual queries
+        if docs_exist:
+            print("🌐 No relevant local data found. Searching the web...")
+        else:
+            print("ℹ️ No documents uploaded yet. Searching the web if relevant...")
 
+        search_results = []
+        try:
+            # Web search only for non-casual queries
+            if len(query.split()) > 2:  # Avoid websearch for greetings or 1-word queries
+                with DDGS() as ddgs:
+                    for r in ddgs.text(query, max_results=5):
+                        search_results.append(f"{r['title']}: {r['body']} ({r['href']})")
+        except Exception as e:
+            print("⚠️ Web search failed:", e)
+            search_results = []
+
+        if search_results:
+            system_prompt = f"""
+            You are a helpful assistant with access to real-time web data.
+            Use the following web results to provide an accurate and concise answer:
+            --------------------
+            {search_results}
+            """
+        else:
+            system_prompt = (
+                "You are a friendly, concise assistant. "
+                "No documents or useful web data are available. "
+                "Respond briefly and naturally."
+            )
+
+    # Step 4: Generate response using NVIDIA model
     response = llm.invoke([
         SystemMessage(content=system_prompt),
         HumanMessage(content=query)
     ])
 
-    # Handle reasoning output if available
+    # Optional: Log reasoning for debugging
     if response.additional_kwargs and "reasoning_content" in response.additional_kwargs:
         print("🧠 Reasoning:\n", response.additional_kwargs["reasoning_content"])
 
     return response.content
 
 # ----------------------------
-# Disabled terminal chat (handled by Flask now)
+# Disabled terminal chat (handled by Flask)
 # ----------------------------
 if __name__ == "__main__":
-
     print("✅ API module loaded. Flask will handle all interactions.")
