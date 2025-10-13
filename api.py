@@ -6,7 +6,7 @@ from langchain_community.document_loaders import Docx2txtLoader, PyPDFLoader, Un
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from sentence_transformers import SentenceTransformer
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
-from duckduckgo_search import DDGS  # ✅ For web search fallback
+from ddgs import DDGS  # ✅ For web search fallback
 
 # ----------------------------
 # Setup
@@ -102,7 +102,7 @@ def answer_query(query):
     has_local_data = retrieved_docs and any(retrieved_docs[0])
 
     if has_local_data:
-        # Found relevant local chunks
+        # ✅ Found relevant local chunks
         system_prompt = f"""
         You are a helpful assistant.
         Use the following uploaded document data if relevant to answer accurately.
@@ -111,36 +111,43 @@ def answer_query(query):
         {retrieved_docs}
         """
     else:
-        # Step 3: If no local data or no docs yet, try web search for factual queries
+        # Step 3: If no local data or no docs yet, decide what to do
         if docs_exist:
             print("🌐 No relevant local data found. Searching the web...")
-        else:
-            print("ℹ️ No documents uploaded yet. Searching the web if relevant...")
-
-        search_results = []
-        try:
-            # Web search only for non-casual queries
-            if len(query.split()) > 2:  # Avoid websearch for greetings or 1-word queries
-                with DDGS() as ddgs:
-                    for r in ddgs.text(query, max_results=5):
-                        search_results.append(f"{r['title']}: {r['body']} ({r['href']})")
-        except Exception as e:
-            print("⚠️ Web search failed:", e)
+            
+            # Try web search since we have docs but they didn't help
             search_results = []
+            try:
+                if len(query.split()) > 2:  # Avoid websearch for greetings or 1-word queries
+                    with DDGS() as ddgs:
+                        for r in ddgs.text(query, max_results=5):
+                            search_results.append(f"{r['title']}: {r['body']} ({r['href']})")
+            except Exception as e:
+                print("⚠️ Web search failed:", e)
+                search_results = []
 
-        if search_results:
-            system_prompt = f"""
-            You are a helpful assistant with access to real-time web data.
-            Use the following web results to provide an accurate and concise answer:
-            --------------------
-            {search_results}
-            """
+            if search_results:
+                system_prompt = f"""
+                You are a helpful assistant with access to real-time web data.
+                Use the following web results to provide an accurate and concise answer:
+                --------------------
+                {search_results}
+                """
+            else:
+                system_prompt = (
+                    "You are a friendly, concise assistant. "
+                    "No relevant document or web data found. "
+                    "Respond naturally using your own knowledge."
+                )
+
         else:
-            system_prompt = (
-                "You are a friendly, concise assistant. "
-                "No documents or useful web data are available. "
-                "Respond briefly and naturally."
-            )
+            # ✅ No documents at all — stay neutral, act as a normal AI
+            print("ℹ️ No documents uploaded yet. Responding normally (no web search).")
+            system_prompt = """
+            You are a conversational AI assistant.
+            No local documents or external data are available.
+            Respond naturally and helpfully using your own general knowledge.
+            """
 
     # Step 4: Generate response using NVIDIA model
     response = llm.invoke([
@@ -153,6 +160,7 @@ def answer_query(query):
         print("🧠 Reasoning:\n", response.additional_kwargs["reasoning_content"])
 
     return response.content
+
 
 # ----------------------------
 # Disabled terminal chat (handled by Flask)

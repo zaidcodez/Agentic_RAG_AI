@@ -28,8 +28,6 @@ text_splitter = RecursiveCharacterTextSplitter(
 
 chunks = text_splitter.split_documents(raw_documents)
 
-# preparing to be added in chromadb
-
 documents = []
 metadata = []
 ids = []
@@ -42,8 +40,6 @@ for chunk in chunks:
     metadata.append(chunk.metadata)
 
     i += 1
-
-# adding to chromadb
 
 collection.upsert(
     documents=documents,
