@@ -87,6 +87,8 @@ def answer_query(query):
     if query_lower in ["hi", "hello", "hey", "what’s up", "yo", "good morning", "good evening"]:
         return "Hey there! 😊 How can I help you today?"
 
+
+    print("\n🚀 Thinking...\n")
     # Step 1: Check if any documents exist at all
     docs_exist = has_uploaded_docs()
 
@@ -113,7 +115,7 @@ def answer_query(query):
     else:
         # Step 3: If no local data or no docs yet, decide what to do
         if docs_exist:
-            print("🌐 No relevant local data found. Searching the web...")
+            print("🌐 No relevant local data found. Searching the web...\n")
             
             # Try web search since we have docs but they didn't help
             search_results = []
@@ -162,8 +164,21 @@ def answer_query(query):
     return response.content
 
 
-# ----------------------------
-# Disabled terminal chat (handled by Flask)
-# ----------------------------
+
+# print("🤖 Tutor AI ready! Type your questions, or upload files with: upload <path>")
+# while True:
+#     user_input = input("\n> ")
+    
+#     if user_input.lower() == "quit":
+#         break
+#     elif user_input.startswith("upload "):
+#         file_path = user_input.split("upload ", 1)[1].strip()
+#         load_and_store(file_path)
+#     else:
+#         answer = answer_query(user_input)
+#         print(f"\nAI Response:\n{answer}")
+# # ----------------------------
+# # Disabled terminal chat (handled by Flask)
+# # ----------------------------
 if __name__ == "__main__":
     print("✅ API module loaded. Flask will handle all interactions.")
