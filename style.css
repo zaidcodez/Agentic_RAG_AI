@@ -1,0 +1,785 @@
+/* =========================================================
+   INTELLECTRA Chatbot - Neumorphic + Light/Dark (Full Layout)
+   ========================================================= */
+
+/* LIGHT THEME */
+:root {
+  --bg: #e6e7ee; 
+  --text: #31344b;
+  --shadow-dark: #b8b9be;
+  --shadow-light: #ffffff;
+  --accent: #2d4cc8;
+  --bubble-user: #dfe2f7;
+  --bubble-ai: #c9f5cd;
+  --popup-bg: #edf0f6;
+  --muted: #6b6f85;
+  --sidebar-bg: #e9eaf0;
+  --soft: #e6e7ee;
+}
+
+/* DARK THEME */
+[data-theme="dark"] {
+  --bg: #2a2b32;
+  --text: #e8e8e8;
+  --shadow-dark: #191a1f;
+  --shadow-light: #33343a;
+  --accent: #768dff;
+  --bubble-user: #33343b;
+  --bubble-ai: #3f4149;
+  --popup-bg: #2f3137;
+  --muted: #9aa0b6;
+  --sidebar-bg: #2c2d34;
+}
+
+/* ===== GENERAL LAYOUT ===== */
+body {
+  margin: 0;
+  font-family: "Nunito Sans", "Segoe UI", Verdana, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  transition: background 0.3s ease, color 0.3s ease;
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+h2 {
+  margin: 0;
+  text-align: center;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* ===== Chat Wrapper ===== */
+#chat-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 22px 28px 100px;
+  background: var(--bg);
+  box-shadow: inset 10px 10px 24px var(--shadow-dark),
+    inset -10px -10px 24px var(--shadow-light);
+  position: relative;
+  box-sizing: border-box;
+  align-items: center;
+  height: 100vh;
+  padding: 10px;
+  margin-left: 280px;
+  overflow-y: auto;
+  transition: margin-left 0.3s ease;
+}
+
+/* ===== Messages ===== */
+#messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px;
+  border-radius: 12px;
+  background: var(--bg);
+  box-shadow: inset 4px 4px 10px var(--shadow-dark),
+    inset -4px -4px 10px var(--shadow-light);
+  scroll-behavior: smooth;
+  width: 100%;
+  max-width: 800px;
+  padding: 15px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ===== File Popup ===== */
+#file-popup {
+  position: absolute;
+  bottom: 60px;
+  left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--popup-bg, #333);
+  border-radius: 10px;
+  padding: 10px;
+  box-shadow: 8px 8px 20px rgba(0, 0, 0, 0.12);
+  min-width: 150px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px) scale(0.98);
+  transform-origin: bottom left;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  z-index: 200;
+}
+
+#file-popup.open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+.popup-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: var(--text);
+}
+
+.popup-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--accent);
+}
+
+/* ===== Text Input ===== */
+#query {
+  flex: 1;
+  resize: none;
+  outline: none;
+  border: none;
+  background: transparent;
+  font-size: 1rem;
+  color: #333;
+  line-height: 1.4;
+  padding: 10px;
+  min-height: 45px;
+  max-height: 150px;
+  border-radius: 8px;
+  background-color: var(--input-bg, #fff);
+  box-shadow: none !important;
+
+}
+
+/* ===== Attached Files ===== */
+#attached-area {
+  position: fixed;
+  bottom: 80px;
+  left: 300px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--popup-bg);
+  color: var(--text);
+  box-shadow: 3px 3px 8px var(--shadow-dark),
+    -3px -3px 8px var(--shadow-light);
+  font-size: 13px;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 900px) {
+          /* .sidebar {
+            display: none;
+          } */
+
+  #input-area {
+    left: 16px;
+    right: 16px;
+  }
+
+  #attached-area {
+    left: 20px;
+  }
+}
+
+/* ===== SIDEBAR ===== */
+#sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 280px;
+  height: 100vh;
+  background: var(--bg);
+  box-shadow: 4px 4px 12px var(--shadow-dark), -4px -4px 12px var(--shadow-light);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.3s ease;
+  z-index: 10;
+}
+
+#sidebar.closed {
+  transform: translateX(-100%);
+}
+
+#sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+#sidebar-header h3 {
+  padding-left: 110px;
+  font-size: 1.4rem;
+}
+
+#closeSidebar {
+  background: var(--bg);
+  border: none;
+  font-size: 1.4rem;
+  cursor: pointer;
+  box-shadow: 3px 3px 6px var(--shadow-dark), -3px -3px 6px var(--shadow-light);
+  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  color: var(--text);
+}
+
+#sidebar-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#newChatBtn {
+  background: var(--soft);
+  border: none;
+  border-radius: 10px;
+  padding: 10px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: 3px 3px 6px var(--shadow-dark), -3px -3px 6px var(--shadow-light);
+  transition: 0.2s;
+}
+
+#newChatBtn:hover {
+  box-shadow: inset 3px 3px 6px var(--shadow-dark),
+    inset -3px -3px 6px var(--shadow-light);
+}
+
+#searchChats {
+  border: none;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: var(--soft);
+  color: var(--text);
+  box-shadow: inset 3px 3px 6px var(--shadow-dark),
+    inset -3px -3px 6px var(--shadow-light);
+}
+
+#chatList {
+  margin-top: 15px;
+  overflow-y: auto;
+  flex-grow: 1;
+}
+
+.chat-item {
+  padding: 10px;
+  border-radius: 10px;
+  margin-bottom: 10px;
+  background: var(--soft);
+  box-shadow: 3px 3px 6px var(--shadow-dark), -3px -3px 6px var(--shadow-light);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chat-item:hover {
+  box-shadow: inset 3px 3px 6px var(--shadow-dark),
+    inset -3px -3px 6px var(--shadow-light);
+}
+
+/* ===== SIDEBAR TOGGLE ===== */
+#menuBtn {
+  position: fixed;
+  top: 18px;
+  left: 18px;
+  background: var(--bg);
+  border: none;
+  font-size: 1.3rem;
+  cursor: pointer;
+  color: var(--text);
+  border-radius: 12px;
+  box-shadow: 3px 3px 6px var(--shadow-dark), -3px -3px 6px var(--shadow-light);
+  width: 45px;
+  height: 45px;
+  z-index: 20;
+}
+
+/* ===== THEME TOGGLE ===== */
+#themeToggleWrap {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 20;
+}
+
+#themeToggle {
+  background: var(--bg);
+  border: none;
+  border-radius: 12px;
+  width: 45px;
+  height: 45px;
+  cursor: pointer;
+  box-shadow: 3px 3px 6px var(--shadow-dark), -3px -3px 6px var(--shadow-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  transition: all 0.3s ease;
+}
+
+#themeToggle:hover {
+  box-shadow: inset 3px 3px 6px var(--shadow-dark),
+    inset -3px -3px 6px var(--shadow-light);
+}
+
+#sidebar.closed~#chat-wrapper {
+  margin-left: 0;
+}
+
+#sidebar.closed+#chat-wrapper #input-area {
+  left: 18px;
+}
+
+body.dark-mode {
+  --bg: #1e1f25;
+  --text: #e0e0e0;
+  --soft: #2a2b32;
+  --shadow-dark: #15161a;
+  --shadow-light: #2f3036;
+}
+
+/* ===== RESPONSIVENESS ===== */
+@media (max-width: 768px) {
+  #sidebar {
+    width: 240px;
+  }
+
+  #chat-wrapper {
+    margin-left: 0;
+    padding: 70px 10px 120px;
+  }
+
+  #input-area {
+    left: 18px;
+    right: 18px;
+    bottom: 20px;
+  }
+
+  #menuBtn,
+  #themeToggle {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+/* ✅ Individual messages */
+.message,
+.response {
+  display: inline-block;
+  max-width: 85%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  line-height: 1.5;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+/* User message (right aligned) */
+.message {
+  align-self: flex-end;
+  background-color: var(--user-msg-bg, #007bff);
+  color: #fff;
+}
+
+/* Bot response (left aligned) */
+.response {
+  align-self: flex-start;
+  background-color: var(--bot-msg-bg, #e5e5ea);
+  color: #000;
+}
+
+
+body.dark-mode,
+[data-theme="dark"] {
+  --bg: #1e1f25;
+  --text: #e0e0e0;
+  --accent: #768dff;
+  --bubble-user: #34353d;
+  --bubble-ai: #3f4149;
+  --popup-bg: #2f3137;
+  --sidebar-bg: #2a2b32;
+  --shadow-dark: #111216;
+  --shadow-light: #2c2d32;
+}
+
+.message.user {
+  background-color: var(--bubble-user);
+  color: var(--accent);
+}
+
+.response.ai {
+  background-color: var(--bubble-ai);
+  color: var(--text);
+}
+
+/* ============================
+   Smooth Dark Mode Transition
+   ============================ */
+html,
+body,
+#chat-wrapper,
+#messages,
+#input-area,
+textarea,
+button {
+  transition: background-color 0.35s ease, color 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
+}
+
+
+/* ================================
+   FIXES: Sidebar, Alignment, Theme
+   ================================ */
+
+/* 1️⃣ Expand chat + input area when sidebar closed */
+#sidebar.closed~#chat-wrapper #messages,
+#sidebar.closed~#chat-wrapper #input-area {
+  max-width: 920px;
+  /* ~15% wider */
+  transition: all 0.3s ease;
+}
+
+/* Keep alignment correct when sidebar open */
+#chat-wrapper #messages,
+#chat-wrapper #input-area {
+  max-width: 800px;
+  margin: 0 auto;
+  transition: all 0.3s ease;
+}
+
+/* 3️⃣ Dark theme fixes for sidebar + chat input */
+[data-theme="dark"] #sidebar,
+body.dark-mode #sidebar {
+  background-color: #222 !important;
+  color: #ddd !important;
+}
+
+[data-theme="dark"] #sidebar .chat-item,
+[data-theme="dark"] #sidebar button,
+[data-theme="dark"] #sidebar input,
+body.dark-mode #sidebar .chat-item,
+body.dark-mode #sidebar button,
+body.dark-mode #sidebar input {
+  background-color: #333 !important;
+  color: #eee !important;
+  border-color: #444 !important;
+}
+
+[data-theme="dark"] #input-area,
+body.dark-mode #input-area {
+  background: #333 !important;
+  box-shadow: inset 4px 4px 10px #191a1f, inset -4px -4px 10px #33343a;
+}
+
+[data-theme="dark"] #query,
+body.dark-mode #query {
+  background: #333 !important;
+  color: #eee !important;
+  border-color: #444 !important;
+}
+
+
+
+
+/* ================================
+   ALIGNMENT, WIDTH & DARK-THEME FIX
+   (Append this at the very end of ds.css)
+   ================================ */
+
+
+/* Messages container centered and constrained */
+#chat-wrapper #messages {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  /* center within chat-wrapper */
+  box-sizing: border-box;
+  transition: max-width 0.25s ease;
+}
+
+/* Input area: positioned relative to chat-wrapper and horizontally centered.
+   This avoids hard-coded left values and keeps alignment with #messages. */
+#chat-wrapper #input-area {
+  position: absolute;
+  /* sits over chat-wrapper, not viewport-fixed */
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 25px;
+  width: calc(100% - 40px);
+  /* small side padding on small screens */
+  max-width: 800px;
+  /* keep same max width as messages */
+  padding: 10px 16px;
+  border-radius: 28px;
+  box-sizing: border-box;
+  z-index: 30;
+  transition: max-width 0.25s ease, background 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* Buttons inside input area keep circular style and inherit bg */
+#chat-wrapper #input-area #attachBtn,
+#chat-wrapper #input-area #sendBtn {
+  flex: 0 0 44px;
+}
+
+/* When sidebar is closed: expand both messages and input area by ~15% */
+#sidebar.closed~#chat-wrapper #messages,
+#sidebar.closed~#chat-wrapper #input-area {
+  max-width: 920px;
+  /* ~ +15% */
+}
+
+/* Fallback: smaller screens keep padding and avoid overflow */
+@media (max-width: 900px) {
+  #chat-wrapper #input-area {
+    position: fixed;
+    /* allow it to be sticky at bottom on narrow screens */
+    left: 16px;
+    right: 16px;
+    transform: none;
+    width: auto;
+    max-width: none;
+    bottom: 20px;
+  }
+
+  #chat-wrapper #messages {
+    padding-bottom: 120px;
+    /* room for fixed input */
+  }
+}
+
+/* === Dark theme overrides ===
+   Use both data-theme and .dark-mode selectors to match how theme is toggled in your JS.
+   These rules intentionally use !important so they override previous styles.
+*/
+[data-theme="dark"] #chat-wrapper #messages,
+body.dark-mode #chat-wrapper #messages {
+  background: transparent !important;
+}
+
+[data-theme="dark"] #sidebar,
+body.dark-mode #sidebar {
+  background: var(--sidebar-bg) !important;
+  color: var(--text) !important;
+}
+
+/* Sidebar rows (chat items, search, new chat, buttons) */
+[data-theme="dark"] #sidebar .chat-item,
+body.dark-mode #sidebar .chat-item,
+[data-theme="dark"] #sidebar input,
+body.dark-mode #sidebar input,
+[data-theme="dark"] #sidebar button,
+body.dark-mode #sidebar button,
+[data-theme="dark"] #sidebar #newChatBtn,
+body.dark-mode #sidebar #newChatBtn {
+  background: #2f3137 !important;
+  color: #e6e6e6 !important;
+  box-shadow: 3px 3px 6px rgba(0, 0, 0, 0.4), -3px -3px 6px rgba(255, 255, 255, 0.02) !important;
+  border: 1px solid rgba(255, 255, 255, 0.03) !important;
+}
+
+/* Input area & textarea dark theme */
+[data-theme="dark"] #chat-wrapper #input-area,
+body.dark-mode #chat-wrapper #input-area {
+  background: #2f3137 !important;
+  box-shadow: inset 4px 4px 10px rgba(0, 0, 0, 0.6), inset -4px -4px 10px rgba(255, 255, 255, 0.02) !important;
+}
+
+[data-theme="dark"] #query,
+body.dark-mode #query {
+  background: transparent !important;
+  color: #e6e6e6 !important;
+  border: 1px solid rgba(255, 255, 255, 0.04) !important;
+}
+
+/* Make sure message bubbles also look correct in dark */
+[data-theme="dark"] .message.user,
+body.dark-mode .message.user {
+  background: var(--bubble-user) !important;
+  color: var(--accent) !important;
+}
+
+[data-theme="dark"] .response.ai,
+body.dark-mode .response.ai {
+  background: var(--bubble-ai) !important;
+  color: var(--text) !important;
+}
+
+/* Small nicety: ensure there's space at bottom of messages area for the absolute input */
+#chat-wrapper #messages {
+  padding-bottom: 140px;
+  /* enough room so last messages aren't hidden behind input */
+}
+
+/* ===============================
+   INTELLECTRA Chat — Unified Soft Box Style
+   =============================== */
+
+/* Make both message and input boxes share one visual style */
+#chat-wrapper #messages {
+  background: #e9ebf1;
+  /* light gray background */
+  border-radius: 22px;
+  box-shadow: inset 4px 4px 10px rgba(0, 0, 0, 0.15),
+    inset -4px -4px 10px rgba(255, 255, 255, 0.8);
+  padding: 30px;
+  margin-bottom: 100px;
+  transition: max-width 0.3s ease, background 0.3s ease;
+}
+
+/* When sidebar is closed, widen messages and input */
+#sidebar.closed~#chat-wrapper #messages,
+#sidebar.closed~#chat-wrapper #input-area {
+  max-width: 920px;
+}
+
+/* Dark theme version */
+[data-theme="dark"] #messages,
+body.dark-mode #messages {
+  background: #1e1f23;
+  box-shadow: inset 4px 4px 10px rgba(0, 0, 0, 0.8),
+    inset -4px -4px 10px rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] #input-area,
+body.dark-mode #input-area {
+  background: #1e1f23;
+  box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.8),
+    -4px -4px 10px rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] #query,
+body.dark-mode #query {
+  color: #e6e6e6;
+}
+
+/* Sidebar dark-theme buttons and search */
+[data-theme="dark"] #sidebar input,
+[data-theme="dark"] #sidebar button,
+body.dark-mode #sidebar input,
+body.dark-mode #sidebar button {
+  background: #2b2d31;
+  color: #e6e6e6;
+  box-shadow: 3px 3px 6px rgba(0, 0, 0, 0.7),
+    -3px -3px 6px rgba(255, 255, 255, 0.03);
+}
+
+/* ===== INPUT AREA ===== */
+#input-area {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: sticky;
+  bottom: 0;
+  width: calc(100% - 40px);
+  max-width: 800px;
+  z-index: 100;
+  border-top: 1px solid var(--border-color, #ccc);
+  padding: 12px 18px;
+  border-radius: 22px;
+  background: #e9ebf1;
+  box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.15),
+    -4px -4px 10px rgba(255, 255, 255, 0.8);
+  right: 18px;
+  transition: max-width 0.3s ease;
+  margin: 0 auto 20px;
+}
+
+/* 🔔 Notification Styles */
+#notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background-color: var(--user-color);
+  color: white;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-weight: 500;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-10px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  z-index: 1000;
+}
+
+#notification.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+#attachBtn,
+#sendBtn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: #e9ebf1;
+  color: #333;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.15),
+    -2px -2px 6px rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+#attachBtn:hover,
+#sendBtn:hover {
+  transform: translateY(-2px);
+  color: var(--accent);
+  box-shadow: inset 2px 2px 6px rgba(0, 0, 0, 0.15),
+    inset -2px -2px 6px rgba(255, 255, 255, 0.7);
+}
+
+.message p,
+.response p,
+.message h1, .response h1,
+.message h2, .response h2,
+.message h3, .response h3,
+.message h4, .response h4,
+.message h5, .response h5,
+.message h6, .response h6,
+.message ul, .response ul,
+.message ol, .response ol {
+  margin: 4px 0;   /* reduce excessive spacing */
+  line-height: 1.3;
+}
+
+.response pre,
+.message pre {
+  margin: 6px 0;
+}
+
+/* ===== FIX: Remove unwanted vertical spacing ===== */
+
+.message,
+.response {
+  white-space: normal !important;
+  margin: 4px 0 !important;
+  line-height: 1.3 !important;
+}
+
+.message p,
+.response p {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Normalize messages container padding */
+#chat-wrapper #messages {
+  padding: 30px;
+  padding-bottom: 120px;
+  margin-bottom: 40px;
+}

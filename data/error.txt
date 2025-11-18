@@ -1,0 +1,8 @@
+one msg at a time
+wait for ansqweer
+clear user query
+containers apart
+area for doc upload
+disable send key for null or empty spaces
+clears attached file and query after each send
+update and send button go down at bottom of txtarea
