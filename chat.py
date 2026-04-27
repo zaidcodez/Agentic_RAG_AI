@@ -52,13 +52,26 @@
 ##GPT RESPONSE BELOW##, ABOVE IS MY CODE
 #############################################
 
+# import os
+# import chromadb
+# from dotenv import load_dotenv
+# from langchain_ollama import ChatOllama
+# from langchain.schema import HumanMessage, SystemMessage
+# from langchain_community.document_loaders import Docx2txtLoader, PyPDFLoader, UnstructuredPowerPointLoader
+# from langchain.text_splitter import RecursiveCharacterTextSplitter
+# from sentence_transformers import SentenceTransformer
+
 import os
 import chromadb
 from dotenv import load_dotenv
 from langchain_ollama import ChatOllama
-from langchain.schema import HumanMessage, SystemMessage
-from langchain_community.document_loaders import Docx2txtLoader, PyPDFLoader, UnstructuredPowerPointLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_community.document_loaders import (
+    Docx2txtLoader,
+    PyPDFLoader,
+    UnstructuredPowerPointLoader
+)
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sentence_transformers import SentenceTransformer
 
 # ----------------------------

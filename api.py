@@ -1,12 +1,26 @@
+# import os
+# import chromadb
+# from dotenv import load_dotenv
+# from langchain.schema import HumanMessage, SystemMessage
+# from langchain_community.document_loaders import Docx2txtLoader, PyPDFLoader, UnstructuredPowerPointLoader
+# from langchain.text_splitter import RecursiveCharacterTextSplitter
+# from sentence_transformers import SentenceTransformer
+# from langchain_nvidia_ai_endpoints import ChatNVIDIA
+# from ddgs import DDGS  # ✅ For web search fallback
+
 import os
 import chromadb
 from dotenv import load_dotenv
-from langchain.schema import HumanMessage, SystemMessage
-from langchain_community.document_loaders import Docx2txtLoader, PyPDFLoader, UnstructuredPowerPointLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_community.document_loaders import (
+    Docx2txtLoader,
+    PyPDFLoader,
+    UnstructuredPowerPointLoader
+)
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sentence_transformers import SentenceTransformer
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
-from ddgs import DDGS  # ✅ For web search fallback
+from ddgs import DDGS
 
 # ----------------------------
 # Setup
@@ -28,11 +42,11 @@ embedder = SentenceTransformer("all-MiniLM-L6-v2")
 
 # NVIDIA LLM client
 llm = ChatNVIDIA(
-    model="deepseek-ai/deepseek-r1-0528",
+    model="nvidia/nemotron-3-super-120b-a12b",
     api_key=API_KEY,
-    temperature=0.6,
-    top_p=0.7,
-    max_tokens=4096,
+    temperature=1,
+    top_p=0.95,
+    max_tokens=16384,
 )
 
 # Text splitter for chunking
