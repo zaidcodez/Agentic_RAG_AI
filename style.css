@@ -1,0 +1,7 @@
+/* Master stylesheet — imports all partials */
+@import url('./static/css/base.css');
+@import url('./static/css/sidebar.css');
+@import url('./static/css/chat.css');
+@import url('./static/css/content.css');
+@import url('./static/css/components.css');
+@import url('./static/css/responsive.css');

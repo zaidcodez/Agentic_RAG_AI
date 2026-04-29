@@ -11,7 +11,7 @@
 import os
 import chromadb
 from dotenv import load_dotenv
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_community.document_loaders import (
     Docx2txtLoader,
     PyPDFLoader,
@@ -94,7 +94,7 @@ def has_uploaded_docs():
 # ----------------------------
 # Helper: Answer query
 # ----------------------------
-def answer_query(query):
+def answer_query(query, chat_history=None):
     query_lower = query.strip().lower()
 
     # Step 0: If user says something casual, stay neutral and short
@@ -166,10 +166,17 @@ def answer_query(query):
             """
 
     # Step 4: Generate response using NVIDIA model
-    response = llm.invoke([
-        SystemMessage(content=system_prompt),
-        HumanMessage(content=query)
-    ])
+    messages_to_send = [SystemMessage(content=system_prompt)]
+    if chat_history:
+        # Pass the last 10 messages for context so we don't blow up token limits
+        for msg in chat_history[-10:]:
+            if msg["sender"] == "user":
+                messages_to_send.append(HumanMessage(content=msg["text"]))
+            elif msg["sender"] == "ai":
+                messages_to_send.append(AIMessage(content=msg["text"]))
+    
+    messages_to_send.append(HumanMessage(content=query))
+    response = llm.invoke(messages_to_send)
 
     # Optional: Log reasoning for debugging
     if response.additional_kwargs and "reasoning_content" in response.additional_kwargs:

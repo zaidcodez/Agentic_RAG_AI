@@ -1,7 +1,8 @@
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-from api import load_and_store, answer_query  # ✅ uses your api.py
+from api import load_and_store, answer_query
 import os
+import database
 
 # ----------------------------
 # Flask setup
@@ -9,12 +10,44 @@ import os
 app = Flask(__name__, static_folder=".", static_url_path="")
 CORS(app)
 
+# Initialize database
+database.init_db()
+
 # ----------------------------
 # Serve frontend (index.html)
 # ----------------------------
 @app.route("/")
 def serve_html():
     return send_from_directory(".", "index.html")
+
+# ----------------------------
+# Session management endpoints
+# ----------------------------
+@app.route("/api/sessions", methods=["GET"])
+def get_sessions():
+    try:
+        sessions = database.get_sessions()
+        return jsonify({"sessions": sessions})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/sessions", methods=["POST"])
+def create_session():
+    try:
+        data = request.get_json()
+        title = data.get("title", "New Session")
+        session_id = database.create_session(title)
+        return jsonify({"session_id": session_id})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/chat/<int:session_id>", methods=["GET"])
+def get_chat_history(session_id):
+    try:
+        messages = database.get_messages(session_id)
+        return jsonify({"messages": messages})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # ----------------------------
 # Chat endpoint
@@ -27,14 +60,33 @@ def chat():
             return jsonify({"error": "Missing 'query' in request"}), 400
 
         query = data["query"].strip()
+        session_id = data.get("session_id")
+
         if not query:
             return jsonify({"error": "Query cannot be empty"}), 400
 
-        # Call the answer function from api.py
-        response_text = answer_query(query)
+        # If no session_id is provided, create a new one using the query as title
+        if not session_id:
+            title = query[:30] + "..." if len(query) > 30 else query
+            session_id = database.create_session(title)
 
-        # Ensure output is JSON-compatible
-        return jsonify({"response": response_text})
+        # Retrieve chat history
+        history = database.get_messages(session_id)
+
+        # Save the user message to the DB
+        database.add_message(session_id, "user", query)
+
+        # Call the answer function from api.py with history context
+        response_text = answer_query(query, chat_history=history)
+
+        # Save the AI response to the DB
+        database.add_message(session_id, "ai", response_text)
+
+        # Return response and the active session_id
+        return jsonify({
+            "response": response_text,
+            "session_id": session_id
+        })
 
     except Exception as e:
         print("❌ Error in /api/chat:", e)

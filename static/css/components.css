@@ -1,0 +1,142 @@
+/* =========================
+   Scroll Button
+   ========================= */
+
+.scroll-btn {
+    position: absolute;
+    right: 40px;
+    bottom: 80px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background-color: var(--sidebar-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    z-index: 20;
+}
+
+.scroll-btn.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.scroll-btn:hover {
+    background-color: var(--primary-accent);
+    color: white;
+    border-color: var(--primary-accent);
+}
+
+/* =========================
+   Chat Timeline Navigator
+   ========================= */
+
+.chat-timeline {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    max-height: 280px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 8px;
+    z-index: 15;
+    padding: 8px;
+    border-radius: 12px;
+    transition: background 0.3s ease, box-shadow 0.3s ease, padding 0.3s ease;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* Always-thin scrollbar inside timeline */
+.chat-timeline::-webkit-scrollbar {
+    width: 3px;
+}
+
+.chat-timeline::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.chat-timeline::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 3px;
+}
+
+.chat-timeline:hover::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.chat-timeline:hover {
+    background-color: var(--glass-bg);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--border-color);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    padding: 12px;
+    max-height: 60vh;
+}
+
+/* Timeline items */
+.timeline-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    transition: all 0.2s;
+    max-width: 240px;
+    justify-content: flex-end;
+    flex-shrink: 0;
+}
+
+/* Cap visible dots at 8 when NOT hovered */
+.timeline-item:nth-child(n+9) {
+    display: none;
+}
+
+.chat-timeline:hover .timeline-item:nth-child(n+9) {
+    display: flex;
+}
+
+.timeline-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 0;
+    opacity: 0;
+    transition: max-width 0.3s ease, opacity 0.3s ease;
+}
+
+.chat-timeline:hover .timeline-text {
+    opacity: 1;
+    max-width: 170px;
+}
+
+.timeline-dot {
+    width: 10px;
+    height: 3px;
+    background-color: rgba(255, 255, 255, 0.15);
+    border-radius: 2px;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.timeline-item:hover .timeline-dot,
+.timeline-item.active .timeline-dot {
+    background-color: var(--primary-accent);
+    width: 16px;
+}
+
+.timeline-item:hover .timeline-text,
+.timeline-item.active .timeline-text {
+    color: var(--text-main);
+}
