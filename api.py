@@ -71,12 +71,13 @@ def load_and_store(file_path):
     docs = loader.load()
     chunks = splitter.split_documents(docs)
     
+    filename = os.path.basename(file_path)
     for i, chunk in enumerate(chunks):
         emb = embedder.encode(chunk.page_content).tolist()
         collection.add(
             documents=[chunk.page_content],
-            metadatas=[{"source": file_path}],
-            ids=[f"{file_path}_{i}"],
+            metadatas=[{"source": filename}],
+            ids=[f"{filename}_{i}"],
             embeddings=[emb]
         )
     print(f"✅ Added {len(chunks)} chunks from {file_path}")
@@ -94,15 +95,23 @@ def has_uploaded_docs():
 # ----------------------------
 # Helper: Answer query
 # ----------------------------
-def answer_query(query, chat_history=None):
+def answer_query(query, chat_history=None, level="standard"):
     query_lower = query.strip().lower()
 
-    # Step 0: If user says something casual, stay neutral and short
+    # Step 0: Study Level Instructions
+    level_instruction = ""
+    if level == "eli5":
+        level_instruction = "IMPORTANT: Use the 'Explain Like I'm 5' approach. Use simple analogies, avoid complex jargon, and break down concepts into their most basic parts."
+    elif level == "advanced":
+        level_instruction = "IMPORTANT: Provide an in-depth, academic, and technical response. Use precise terminology, explore nuances, and assume the user has prior knowledge of the subject."
+    else:
+        level_instruction = "IMPORTANT: Provide a clear, balanced, and helpful explanation suitable for a standard student level."
+
+    # Step 0.1: Casual greetings
     if query_lower in ["hi", "hello", "hey", "what’s up", "yo", "good morning", "good evening"]:
         return "Hey there! 😊 How can I help you today?"
 
-
-    print("\n🚀 Thinking...\n")
+    print(f"\n🚀 Thinking (Level: {level})...\n")
     # Step 1: Check if any documents exist at all
     docs_exist = has_uploaded_docs()
 
@@ -120,9 +129,12 @@ def answer_query(query, chat_history=None):
     if has_local_data:
         # ✅ Found relevant local chunks
         system_prompt = f"""
-        You are a helpful assistant.
-        Use the following uploaded document data if relevant to answer accurately.
-        If the question is casual or unrelated to the documents, reply naturally and concisely.
+        You are Intellectra, a world-class AI tutor. 
+        Your goal is to help the user learn and understand.
+        {level_instruction}
+        
+        Use the following document segments to answer accurately. 
+        If the data is insufficient, say so and use your own knowledge.
         --------------------
         {retrieved_docs}
         """
@@ -131,10 +143,9 @@ def answer_query(query, chat_history=None):
         if docs_exist:
             print("🌐 No relevant local data found. Searching the web...\n")
             
-            # Try web search since we have docs but they didn't help
             search_results = []
             try:
-                if len(query.split()) > 2:  # Avoid websearch for greetings or 1-word queries
+                if len(query.split()) > 2:
                     with DDGS() as ddgs:
                         for r in ddgs.text(query, max_results=5):
                             search_results.append(f"{r['title']}: {r['body']} ({r['href']})")
@@ -144,31 +155,31 @@ def answer_query(query, chat_history=None):
 
             if search_results:
                 system_prompt = f"""
-                You are a helpful assistant with access to real-time web data.
-                Use the following web results to provide an accurate and concise answer:
+                You are Intellectra, a world-class AI tutor.
+                {level_instruction}
+                
+                No relevant uploaded documents found, so use these web results to help:
                 --------------------
                 {search_results}
                 """
             else:
-                system_prompt = (
-                    "You are a friendly, concise assistant. "
-                    "No relevant document or web data found. "
-                    "Respond naturally using your own knowledge."
-                )
+                system_prompt = f"""
+                You are Intellectra, a friendly and concise AI tutor.
+                {level_instruction}
+                Respond naturally using your own general knowledge.
+                """
 
         else:
-            # ✅ No documents at all — stay neutral, act as a normal AI
-            print("ℹ️ No documents uploaded yet. Responding normally (no web search).")
-            system_prompt = """
-            You are a conversational AI assistant.
-            No local documents or external data are available.
-            Respond naturally and helpfully using your own general knowledge.
+            # ✅ No documents at all — act as a normal tutor
+            system_prompt = f"""
+            You are Intellectra, a world-class AI tutor.
+            {level_instruction}
+            No documents have been uploaded yet. Respond naturally and helpfully using your knowledge.
             """
 
     # Step 4: Generate response using NVIDIA model
     messages_to_send = [SystemMessage(content=system_prompt)]
     if chat_history:
-        # Pass the last 10 messages for context so we don't blow up token limits
         for msg in chat_history[-10:]:
             if msg["sender"] == "user":
                 messages_to_send.append(HumanMessage(content=msg["text"]))
@@ -178,11 +189,21 @@ def answer_query(query, chat_history=None):
     messages_to_send.append(HumanMessage(content=query))
     response = llm.invoke(messages_to_send)
 
-    # Optional: Log reasoning for debugging
-    if response.additional_kwargs and "reasoning_content" in response.additional_kwargs:
-        print("🧠 Reasoning:\n", response.additional_kwargs["reasoning_content"])
+    # Extract sources if they exist
+    sources = []
+    if has_local_data:
+        try:
+            # results is from the earlier collection.query call
+            metas = results.get("metadatas", [])
+            if metas:
+                sources = list(set([m["source"] for m in metas[0] if "source" in m]))
+        except Exception:
+            sources = []
 
-    return response.content
+    return {
+        "response": response.content,
+        "sources": sources
+    }
 
 
 

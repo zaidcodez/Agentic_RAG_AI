@@ -9,6 +9,7 @@ const newChatBtn = document.getElementById("newChatBtn");
 const sessionTitle = document.getElementById("sessionTitle");
 const chatTimeline = document.getElementById("chat-timeline");
 const historySearch = document.getElementById("historySearch");
+const studyLevel = document.getElementById("studyLevel");
 
 // Mobile Sidebar Elements
 const menuBtn = document.getElementById("menuBtn");
@@ -236,7 +237,7 @@ function renderMarkdownWithMath(text) {
     return html;
 }
 
-function appendMessage(text, sender) {
+function appendMessage(text, sender, sources = []) {
     const wrapper = document.createElement("div");
     wrapper.className = `msg-wrapper ${sender}`;
     
@@ -285,9 +286,18 @@ function appendMessage(text, sender) {
         formattedText = renderMarkdownWithMath(text);
     }
 
+    // Sources chips
+    let sourcesHtml = "";
+    if (sources && sources.length > 0) {
+        sourcesHtml = `<div class="sources-container">
+            <div class="sources-title">Sources:</div>
+            ${sources.map(s => `<span class="source-chip"><i class="ri-file-list-2-line"></i> ${s}</span>`).join('')}
+        </div>`;
+    }
+
     wrapper.innerHTML = `
         ${nameHtml}
-        <div class="msg-bubble">${formattedText}</div>
+        <div class="msg-bubble">${formattedText}${sourcesHtml}</div>
     `;
     
     messagesDiv.appendChild(wrapper);
@@ -410,7 +420,11 @@ async function sendMessage() {
         const res = await fetch("http://127.0.0.1:5000/api/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ query: query, session_id: currentSessionId })
+            body: JSON.stringify({ 
+                query: query, 
+                session_id: currentSessionId,
+                level: studyLevel.value 
+            })
         });
 
         const data = await res.json();
@@ -425,7 +439,7 @@ async function sendMessage() {
             // Still on the same chat — update UI directly
             typingIndicator.remove();
             if (data.response) {
-                appendMessage(data.response, "ai");
+                appendMessage(data.response, "ai", data.sources || []);
             }
             if (data.session_id && currentSessionId !== data.session_id) {
                 currentSessionId = data.session_id;

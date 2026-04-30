@@ -76,16 +76,20 @@ def chat():
         # Save the user message to the DB
         database.add_message(session_id, "user", query)
 
-        # Call the answer function from api.py with history context
-        response_text = answer_query(query, chat_history=history)
+        # Call the answer function from api.py with history context and level
+        level = data.get("level", "standard")
+        result = answer_query(query, chat_history=history, level=level)
+        response_text = result["response"]
+        sources = result["sources"]
 
         # Save the AI response to the DB
         database.add_message(session_id, "ai", response_text)
 
-        # Return response and the active session_id
+        # Return response, session_id, and sources
         return jsonify({
             "response": response_text,
-            "session_id": session_id
+            "session_id": session_id,
+            "sources": sources
         })
 
     except Exception as e:
