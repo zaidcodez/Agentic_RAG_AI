@@ -13,4 +13,4 @@ Currently using Langchain, chromadb, Langchain_community libraries, running Loca
 3- py -m venv venv<br>
 4- venv\Scripts\activate    ( if you get errors, type :     Set-ExecutionPolicy RemoteSigned -Force  )<br>
 5- pip install -r requirements.txt<br>
-6- py .\chat.py
+6- py .\app.py
