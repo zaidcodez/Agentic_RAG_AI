@@ -98,7 +98,7 @@ header {
 }
 
 .msg-wrapper.ai .msg-bubble {
-    background-color: var(--sidebar-bg);
+    background-color: var(--chat-bg-ai);
     border: 1px solid var(--border-color);
     border-bottom-left-radius: 4px;
 }
@@ -138,7 +138,7 @@ header {
     border: 1px solid var(--border-color);
     border-radius: 16px;
     padding: 8px 16px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    box-shadow: 0 8px 32px var(--shadow-color);
     transition: border-color 0.3s;
 }
 
@@ -154,30 +154,62 @@ header {
     font-size: 1rem;
     padding: 10px;
     outline: none;
+    resize: none;
+    max-height: 150px;
+    font-family: inherit;
+    line-height: 1.5;
 }
 
-.study-select {
-    background-color: rgba(255, 255, 255, 0.05);
+.custom-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.dropdown-menu {
+    position: absolute;
+    bottom: calc(100% + 15px);
+    left: 0;
+    background: var(--sidebar-bg);
     border: 1px solid var(--border-color);
-    color: var(--text-muted);
-    font-size: 0.75rem;
-    border-radius: 6px;
-    padding: 4px 8px;
-    margin-right: 8px;
+    border-radius: 12px;
+    padding: 8px;
+    min-width: 160px;
+    box-shadow: 0 10px 40px var(--shadow-color);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(10px);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 100;
+}
+
+.dropdown-menu.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.dropdown-item {
+    padding: 10px 14px;
+    border-radius: 8px;
     cursor: pointer;
-    outline: none;
-    transition: all 0.2s;
-    appearance: none; /* Hide default arrow */
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    transition: all 0.2s ease;
+    margin-bottom: 2px;
 }
 
-.study-select:hover {
-    background-color: rgba(255, 255, 255, 0.08);
+.dropdown-item:last-child {
+    margin-bottom: 0;
+}
+
+.dropdown-item:hover {
+    background: var(--hover-overlay);
     color: var(--text-main);
 }
 
-.study-select option {
-    background-color: var(--sidebar-bg);
-    color: var(--text-main);
+.dropdown-item.active {
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--primary-accent);
 }
 
 .action-btn {
@@ -195,7 +227,7 @@ header {
 }
 
 .action-btn:hover {
-    background-color: rgba(255,255,255,0.08);
+    background-color: var(--hover-overlay);
     color: var(--text-main);
 }
 
@@ -217,7 +249,7 @@ header {
 .sources-container {
     margin-top: 15px;
     padding-top: 12px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-top: 1px solid var(--border-color);
     display: flex;
     flex-wrap: wrap;
     gap: 8px;

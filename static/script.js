@@ -9,16 +9,80 @@ const newChatBtn = document.getElementById("newChatBtn");
 const sessionTitle = document.getElementById("sessionTitle");
 const chatTimeline = document.getElementById("chat-timeline");
 const historySearch = document.getElementById("historySearch");
-const studyLevel = document.getElementById("studyLevel");
+const studyLevelBtn = document.getElementById("studyLevelBtn");
+const studyLevelMenu = document.getElementById("studyLevelMenu");
+const dropdownItems = document.querySelectorAll(".dropdown-item");
 
 // Mobile Sidebar Elements
 const menuBtn = document.getElementById("menuBtn");
 const sidebar = document.getElementById("sidebar");
 const sidebarOverlay = document.getElementById("sidebar-overlay");
 
+// Theme Toggle
+const themeToggleBtn = document.getElementById("themeToggleBtn");
+let currentTheme = localStorage.getItem('intellectra_theme') || 'dark';
+
+// Apply saved theme on load
+if (currentTheme === 'light') {
+    document.body.setAttribute('data-theme', 'light');
+    themeToggleBtn.className = 'ri-moon-line';
+} else {
+    document.body.removeAttribute('data-theme');
+    themeToggleBtn.className = 'ri-sun-line';
+}
+
+themeToggleBtn.addEventListener("click", () => {
+    if (currentTheme === 'dark') {
+        currentTheme = 'light';
+        document.body.setAttribute('data-theme', 'light');
+        themeToggleBtn.className = 'ri-moon-line';
+    } else {
+        currentTheme = 'dark';
+        document.body.removeAttribute('data-theme');
+        themeToggleBtn.className = 'ri-sun-line';
+    }
+    localStorage.setItem('intellectra_theme', currentTheme);
+});
+
 let currentSessionId = null;
 let userMessageCount = 0;
+let currentStudyLevel = 'standard';
 const pendingSessions = new Set(); // Track sessions with in-flight AI requests
+
+let isGenerating = false;
+let currentAbortController = null;
+
+// Dropdown Logic
+studyLevelBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    studyLevelMenu.classList.toggle("show");
+});
+
+document.addEventListener("click", (e) => {
+    if (!e.target.closest('.custom-dropdown')) {
+        studyLevelMenu.classList.remove("show");
+    }
+});
+
+dropdownItems.forEach(item => {
+    item.addEventListener("click", () => {
+        currentStudyLevel = item.dataset.value;
+        dropdownItems.forEach(i => i.classList.remove("active"));
+        item.classList.add("active");
+        studyLevelMenu.classList.remove("show");
+        
+        if (currentStudyLevel === 'eli5') {
+            studyLevelBtn.innerHTML = '<i class="ri-seedling-line" style="color: #4ade80;"></i>';
+            studyLevelBtn.title = "Study Mode: ELI5";
+        } else if (currentStudyLevel === 'advanced') {
+            studyLevelBtn.innerHTML = '<i class="ri-flask-line" style="color: #f87171;"></i>';
+            studyLevelBtn.title = "Study Mode: Advanced";
+        } else {
+            studyLevelBtn.innerHTML = '<i class="ri-graduation-cap-line"></i>';
+            studyLevelBtn.title = "Study Mode: Standard";
+        }
+    });
+});
 
 // Session persistence via localStorage
 function saveCurrentSession() {
@@ -318,8 +382,17 @@ async function fetchSessions() {
                 div.className = "history-item";
                 div.dataset.sessionId = String(session.id);
                 if (session.id === currentSessionId) div.classList.add("active");
-                div.textContent = session.title;
-                div.onclick = () => {
+                
+                div.innerHTML = `
+                    <div class="history-item-title">${session.title}</div>
+                    <div class="delete-chat-btn" onclick="deleteSession(event, ${session.id})">
+                        <i class="ri-delete-bin-line"></i>
+                    </div>
+                `;
+                
+                div.onclick = (e) => {
+                    // Prevent triggering if delete button was clicked
+                    if (e.target.closest('.delete-chat-btn')) return;
                     loadSession(session.id, session.title);
                     if(window.innerWidth <= 768) closeSidebar();
                 };
@@ -388,6 +461,7 @@ function startNewChat() {
     
     if(window.innerWidth <= 768) closeSidebar();
 
+    // Restore the welcome message
     const wrapper = document.createElement("div");
     wrapper.className = "msg-wrapper ai";
     wrapper.innerHTML = `
@@ -397,16 +471,57 @@ function startNewChat() {
     messagesDiv.appendChild(wrapper);
 }
 
+// Delete session
+async function deleteSession(event, sessionId) {
+    event.stopPropagation(); // Don't trigger the chat load
+    if (!confirm("Are you sure you want to delete this chat?")) return;
+
+    try {
+        const res = await fetch(`http://127.0.0.1:5000/api/sessions/${sessionId}`, {
+            method: 'DELETE'
+        });
+        
+        if (res.ok) {
+            // If the deleted session is the currently active one, start a new chat
+            if (currentSessionId === sessionId) {
+                startNewChat();
+            } else {
+                fetchSessions(); // Just refresh the list
+            }
+        } else {
+            console.error("Failed to delete session");
+        }
+    } catch (err) {
+        console.error("Error deleting session:", err);
+    }
+}
+
 newChatBtn.addEventListener("click", startNewChat);
 
+// Stop Generation
+function stopGeneration() {
+    if (currentAbortController) {
+        currentAbortController.abort();
+    }
+}
+
 // Send Message
-async function sendMessage() {
-    const query = queryInput.value.trim();
+async function sendMessage(retryText = null) {
+    if (isGenerating) return;
+
+    const query = retryText || queryInput.value.trim();
     if (!query) return;
     
-    appendMessage(query, "user");
+    if (!retryText) appendMessage(query, "user");
+    
     queryInput.value = "";
-    queryInput.focus();
+    queryInput.style.height = 'auto'; // Reset auto-resize
+    queryInput.disabled = true;
+    queryInput.placeholder = "Intellectra is thinking...";
+    
+    isGenerating = true;
+    sendBtn.innerHTML = '<i class="ri-stop-mini-fill"></i>';
+    sendBtn.classList.add("stop-btn");
 
     const typingIndicator = createTypingIndicator();
     messagesDiv.appendChild(typingIndicator);
@@ -415,15 +530,18 @@ async function sendMessage() {
     // Remember which session this request belongs to
     const requestSessionId = currentSessionId;
     pendingSessions.add(requestSessionId);
+    
+    currentAbortController = new AbortController();
 
     try {
         const res = await fetch("http://127.0.0.1:5000/api/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            signal: currentAbortController.signal,
             body: JSON.stringify({ 
                 query: query, 
                 session_id: currentSessionId,
-                level: studyLevel.value 
+                level: currentStudyLevel 
             })
         });
 
@@ -454,25 +572,51 @@ async function sendMessage() {
             typingIndicator.remove();
             fetchSessions();
         }
-
     } catch (err) {
         pendingSessions.delete(requestSessionId);
-        // Only show error if user is still on the same session
         if (currentSessionId === requestSessionId) {
             typingIndicator.remove();
-            appendMessage("⚠️ Server not responding. Is the backend running?", "ai");
+            if (err.name === 'AbortError') {
+                appendMessage("⚠️ Generation stopped by user.", "ai");
+            } else {
+                // Add a retry button
+                const encodedQuery = query.replace(/"/g, '&quot;');
+                appendMessage(`⚠️ Server not responding. <button class="action-btn" style="display:inline; padding: 2px 8px; font-size: 0.8rem; border: 1px solid var(--border-color); margin-left: 8px;" onclick="sendMessage('${encodedQuery}')">Retry</button>`, "ai");
+            }
         }
+    } finally {
+        isGenerating = false;
+        queryInput.disabled = false;
+        queryInput.placeholder = "Message Intellectra...";
+        sendBtn.innerHTML = '<i class="ri-send-plane-fill"></i>';
+        sendBtn.classList.remove("stop-btn");
+        setTimeout(() => queryInput.focus(), 10);
     }
 }
 
-queryInput.addEventListener("keypress", (e) => {
-    if (e.key === "Enter") {
+queryInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        sendMessage();
+        if (isGenerating) {
+            stopGeneration();
+        } else {
+            sendMessage();
+        }
     }
 });
 
-sendBtn.addEventListener("click", sendMessage);
+queryInput.addEventListener("input", function() {
+    this.style.height = 'auto';
+    this.style.height = (this.scrollHeight) + 'px';
+});
+
+sendBtn.addEventListener("click", () => {
+    if (isGenerating) {
+        stopGeneration();
+    } else {
+        sendMessage();
+    }
+});
 
 // File Upload Handling
 attachBtn.addEventListener("click", () => {

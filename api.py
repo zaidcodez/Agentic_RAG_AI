@@ -109,7 +109,10 @@ def answer_query(query, chat_history=None, level="standard"):
 
     # Step 0.1: Casual greetings
     if query_lower in ["hi", "hello", "hey", "what’s up", "yo", "good morning", "good evening"]:
-        return "Hey there! 😊 How can I help you today?"
+        return {
+            "response": "Hey there! 😊 How can I help you today?",
+            "sources": []
+        }
 
     print(f"\n🚀 Thinking (Level: {level})...\n")
     # Step 1: Check if any documents exist at all

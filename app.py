@@ -41,6 +41,14 @@ def create_session():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/api/sessions/<int:session_id>", methods=["DELETE"])
+def delete_session(session_id):
+    try:
+        database.delete_session(session_id)
+        return jsonify({"message": "Session deleted successfully"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/api/chat/<int:session_id>", methods=["GET"])
 def get_chat_history(session_id):
     try:
@@ -73,16 +81,15 @@ def chat():
         # Retrieve chat history
         history = database.get_messages(session_id)
 
-        # Save the user message to the DB
-        database.add_message(session_id, "user", query)
-
         # Call the answer function from api.py with history context and level
         level = data.get("level", "standard")
         result = answer_query(query, chat_history=history, level=level)
         response_text = result["response"]
         sources = result["sources"]
 
-        # Save the AI response to the DB
+        # Save BOTH messages ONLY after generation succeeds
+        # This prevents DB corruption if the user aborts the request
+        database.add_message(session_id, "user", query)
         database.add_message(session_id, "ai", response_text)
 
         # Return response, session_id, and sources

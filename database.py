@@ -65,3 +65,11 @@ def get_messages(session_id):
     rows = cursor.fetchall()
     conn.close()
     return [{"sender": r[0], "text": r[1], "timestamp": r[2]} for r in rows]
+
+def delete_session(session_id):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM messages WHERE session_id = ?', (session_id,))
+    cursor.execute('DELETE FROM sessions WHERE id = ?', (session_id,))
+    conn.commit()
+    conn.close()

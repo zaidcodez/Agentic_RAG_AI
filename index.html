@@ -47,7 +47,9 @@
                 <i class="ri-menu-line"></i>
             </button>
             <div class="header-title" id="sessionTitle">Current Session</div>
-            <div><i class="ri-settings-3-line" style="cursor: pointer; color: var(--text-muted);"></i></div>
+            <div>
+                <i id="themeToggleBtn" class="ri-sun-line" style="cursor: pointer; color: var(--text-muted); font-size: 1.2rem; transition: color 0.3s;"></i>
+            </div>
         </header>
 
         <!-- Chat Timeline Navigator -->
@@ -66,12 +68,17 @@
                     <i class="ri-attachment-2"></i>
                 </button>
                 <input type="file" id="fileInput" accept=".pdf,.docx,.ppt,.pptx" />
-                <select id="studyLevel" class="study-select" title="Explanation Level">
-                    <option value="standard">Standard</option>
-                    <option value="eli5">ELI5 (Simple)</option>
-                    <option value="advanced">Advanced</option>
-                </select>
-                <input id="query" type="text" placeholder="Message Intellectra..." autocomplete="off" />
+                <div class="custom-dropdown">
+                    <button class="action-btn" id="studyLevelBtn" title="Study Mode">
+                        <i class="ri-graduation-cap-line"></i>
+                    </button>
+                    <div class="dropdown-menu" id="studyLevelMenu">
+                        <div class="dropdown-item active" data-value="standard">Standard</div>
+                        <div class="dropdown-item" data-value="eli5">ELI5 (Simple)</div>
+                        <div class="dropdown-item" data-value="advanced">Advanced</div>
+                    </div>
+                </div>
+                <textarea id="query" placeholder="Message Intellectra..." rows="1"></textarea>
                 <button class="action-btn send-btn" id="sendBtn">
                     <i class="ri-send-plane-fill"></i>
                 </button>
