@@ -104,6 +104,24 @@ def chat():
         return jsonify({"error": str(e)}), 500
 
 # ----------------------------
+# Flashcard endpoint
+# ----------------------------
+@app.route("/api/flashcards", methods=["POST"])
+def flashcards():
+    try:
+        data = request.get_json()
+        if not data or "text" not in data:
+            return jsonify({"error": "Missing 'text' in request"}), 400
+
+        from api import generate_flashcards
+        cards = generate_flashcards(data["text"])
+        return jsonify({"flashcards": cards})
+
+    except Exception as e:
+        print("❌ Error in /api/flashcards:", e)
+        return jsonify({"error": str(e)}), 500
+
+# ----------------------------
 # Upload endpoint
 # ----------------------------
 @app.route("/api/upload", methods=["POST"])

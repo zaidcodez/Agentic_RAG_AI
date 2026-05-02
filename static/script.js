@@ -359,14 +359,116 @@ function appendMessage(text, sender, sources = []) {
         </div>`;
     }
 
+    // Flashcards button for AI messages
+    let flashcardBtnHtml = "";
+    const bubbleId = `bubble-${Math.random().toString(36).substring(2, 9)}`;
+    
+    if (sender === 'ai' && text.length > 50 && !text.startsWith("⚠️") && !text.startsWith("Assalamu alaikum")) {
+        const encodedText = text.replace(/"/g, '&quot;').replace(/'/g, "\\'");
+        flashcardBtnHtml = `
+            <div style="width: 100%; margin-top: 10px;">
+                <button class="flashcard-btn" onclick="generateFlashcards('${bubbleId}', '${encodedText}')" id="btn-${bubbleId}">
+                    <i class="ri-stack-line"></i> Generate Flashcards
+                </button>
+                <div id="flashcards-${bubbleId}"></div>
+            </div>
+        `;
+    }
+
     wrapper.innerHTML = `
         ${nameHtml}
-        <div class="msg-bubble">${formattedText}${sourcesHtml}</div>
+        <div class="msg-bubble" id="${bubbleId}">
+            ${formattedText}${sourcesHtml}
+            ${flashcardBtnHtml}
+        </div>
     `;
     
     messagesDiv.appendChild(wrapper);
     messagesDiv.scrollTo({ top: messagesDiv.scrollHeight, behavior: 'smooth' });
 }
+
+// ------------------------------------
+// Flashcard Logic
+// ------------------------------------
+async function generateFlashcards(bubbleId, text) {
+    const btn = document.getElementById(`btn-${bubbleId}`);
+    const container = document.getElementById(`flashcards-${bubbleId}`);
+    if (!btn || !container) return;
+
+    btn.innerHTML = `<i class="ri-loader-4-line ri-spin"></i> Generating...`;
+    btn.disabled = true;
+
+    try {
+        const res = await fetch("http://127.0.0.1:5000/api/flashcards", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: text })
+        });
+        
+        const data = await res.json();
+        
+        if (data.flashcards && data.flashcards.length > 0) {
+            btn.style.display = 'none'; // hide the button
+            renderFlashcards(data.flashcards, container);
+        } else {
+            btn.innerHTML = `<i class="ri-error-warning-line"></i> Failed. Retry?`;
+            btn.disabled = false;
+        }
+    } catch (err) {
+        console.error(err);
+        btn.innerHTML = `<i class="ri-error-warning-line"></i> Failed. Retry?`;
+        btn.disabled = false;
+    }
+}
+
+function renderFlashcards(cards, container, startIndex = 0) {
+    let currentIndex = startIndex;
+
+    const renderCard = () => {
+        const card = cards[currentIndex];
+        container.innerHTML = `
+            <div class="flashcard-container">
+                <div class="flashcard-indicator">Card ${currentIndex + 1} of ${cards.length}</div>
+                <div class="flashcard" onclick="this.classList.toggle('flipped')">
+                    <div class="flashcard-inner">
+                        <div class="flashcard-front">${card.front}</div>
+                        <div class="flashcard-back">${card.back}</div>
+                    </div>
+                </div>
+                <div class="flashcard-controls">
+                    <button onclick="changeFlashcard(event, -1, '${container.id}')" ${currentIndex === 0 ? 'disabled style="opacity:0.5"' : ''}>
+                        <i class="ri-arrow-left-s-line"></i> Prev
+                    </button>
+                    <span style="font-size: 0.8rem; color: var(--text-muted);">Click card to flip</span>
+                    <button onclick="changeFlashcard(event, 1, '${container.id}')" ${currentIndex === cards.length - 1 ? 'disabled style="opacity:0.5"' : ''}>
+                        Next <i class="ri-arrow-right-s-line"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        // Store state on container
+        container.dataset.currentIndex = currentIndex;
+        container.dataset.cards = JSON.stringify(cards);
+    };
+
+    renderCard();
+}
+
+window.changeFlashcard = function(event, direction, containerId) {
+    event.stopPropagation();
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    
+    let currentIndex = parseInt(container.dataset.currentIndex);
+    const cards = JSON.parse(container.dataset.cards);
+    
+    currentIndex += direction;
+    if (currentIndex >= 0 && currentIndex < cards.length) {
+        // Render with new index
+        renderFlashcards(cards, container, currentIndex);
+    }
+};
 
 // Fetch session history list
 async function fetchSessions() {

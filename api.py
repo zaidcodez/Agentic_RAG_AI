@@ -208,7 +208,42 @@ def answer_query(query, chat_history=None, level="standard"):
         "sources": sources
     }
 
-
+# ----------------------------
+# Helper: Generate Flashcards
+# ----------------------------
+def generate_flashcards(text):
+    system_prompt = """
+    You are an AI tutor tool designed to extract key concepts from educational text and convert them into flashcards.
+    Extract the most important facts, definitions, or concepts from the provided text and formulate them as clear, concise Question/Answer pairs.
+    You MUST output valid JSON only. Do not wrap it in markdown code blocks.
+    The JSON structure MUST be an array of objects, like this:
+    [
+        {"front": "What is ...?", "back": "It is ..."},
+        {"front": "...", "back": "..."}
+    ]
+    Limit to a maximum of 5 most critical flashcards.
+    """
+    try:
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=f"Extract flashcards from this text:\n\n{text}")
+        ]
+        response = llm.invoke(messages)
+        content = response.content.strip()
+        # Clean up in case LLM added markdown block wrappers
+        if content.startswith("```json"):
+            content = content[7:]
+        elif content.startswith("```"):
+            content = content[3:]
+        if content.endswith("```"):
+            content = content[:-3]
+        
+        import json
+        cards = json.loads(content.strip())
+        return cards
+    except Exception as e:
+        print(f"Error generating flashcards: {e}")
+        return []
 
 # print("🤖 Tutor AI ready! Type your questions, or upload files with: upload <path>")
 # while True:
