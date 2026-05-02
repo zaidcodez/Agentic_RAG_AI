@@ -301,7 +301,7 @@ function renderMarkdownWithMath(text) {
     return html;
 }
 
-function appendMessage(text, sender, sources = []) {
+function appendMessage(text, sender, sources = [], messageId = null, widgets = []) {
     const wrapper = document.createElement("div");
     wrapper.className = `msg-wrapper ${sender}`;
     
@@ -359,19 +359,39 @@ function appendMessage(text, sender, sources = []) {
         </div>`;
     }
 
-    // Flashcards button for AI messages
-    let flashcardBtnHtml = "";
+    // Flashcards & Quiz buttons for AI messages
+    let actionsHtml = "";
     const bubbleId = `bubble-${Math.random().toString(36).substring(2, 9)}`;
     
     if (sender === 'ai' && text.length > 50 && !text.startsWith("⚠️") && !text.startsWith("Assalamu alaikum")) {
-        const encodedText = text.replace(/"/g, '&quot;').replace(/'/g, "\\'");
-        flashcardBtnHtml = `
-            <div style="width: 100%; margin-top: 10px;">
-                <button class="flashcard-btn" onclick="generateFlashcards('${bubbleId}', '${encodedText}')" id="btn-${bubbleId}">
+        const encodedText = text.replace(/"/g, '&quot;');
+        
+        const flashcardWidgets = widgets.filter(w => w.widget_type === 'flashcard');
+        const quizWidgets = widgets.filter(w => w.widget_type === 'quiz');
+
+        let viewFlashcardsBtn = flashcardWidgets.length > 0 ? 
+            `<button class="flashcard-subtle-btn view-btn" id="view-flashcard-btn-${bubbleId}" onclick="toggleWidgets('${bubbleId}', 'flashcards')" title="View Saved Flashcards">
+                <i class="ri-eye-line"></i> View Flashcards (${flashcardWidgets.length})
+            </button>` : "";
+            
+        let viewQuizBtn = quizWidgets.length > 0 ? 
+            `<button class="flashcard-subtle-btn view-btn" id="view-quiz-btn-${bubbleId}" onclick="toggleWidgets('${bubbleId}', 'quiz')" title="View Saved Quizzes">
+                <i class="ri-eye-line"></i> View Quizzes (${quizWidgets.length})
+            </button>` : "";
+
+        actionsHtml = `
+            <div class="msg-actions">
+                <button class="flashcard-subtle-btn" data-text="${encodedText}" onclick="generateFlashcards('${bubbleId}', this.dataset.text, ${messageId})" id="btn-flashcard-${bubbleId}" title="Generate Flashcards">
                     <i class="ri-stack-line"></i> Generate Flashcards
                 </button>
-                <div id="flashcards-${bubbleId}"></div>
+                <button class="flashcard-subtle-btn" data-text="${encodedText}" onclick="generateQuiz('${bubbleId}', this.dataset.text, ${messageId})" id="btn-quiz-${bubbleId}" title="Generate Quiz">
+                    <i class="ri-questionnaire-line"></i> Generate Quiz
+                </button>
+                ${viewFlashcardsBtn}
+                ${viewQuizBtn}
             </div>
+            <div id="flashcards-container-${bubbleId}" class="widget-display-container" style="display: none;"></div>
+            <div id="quiz-container-${bubbleId}" class="widget-display-container" style="display: none;"></div>
         `;
     }
 
@@ -379,46 +399,129 @@ function appendMessage(text, sender, sources = []) {
         ${nameHtml}
         <div class="msg-bubble" id="${bubbleId}">
             ${formattedText}${sourcesHtml}
-            ${flashcardBtnHtml}
+            ${actionsHtml}
         </div>
     `;
     
     messagesDiv.appendChild(wrapper);
     messagesDiv.scrollTo({ top: messagesDiv.scrollHeight, behavior: 'smooth' });
+
+    // Render saved widgets if any
+    if (sender === 'ai') {
+        const fContainer = document.getElementById(`flashcards-container-${bubbleId}`);
+        const qContainer = document.getElementById(`quiz-container-${bubbleId}`);
+        if (fContainer && widgets.filter(w => w.widget_type === 'flashcard').length > 0) {
+            renderSavedFlashcards(widgets.filter(w => w.widget_type === 'flashcard'), fContainer);
+        }
+        if (qContainer && widgets.filter(w => w.widget_type === 'quiz').length > 0) {
+            renderSavedQuizzes(widgets.filter(w => w.widget_type === 'quiz'), qContainer);
+        }
+    }
+}
+
+window.toggleWidgets = function(bubbleId, prefix) {
+    const container = document.getElementById(`${prefix}-container-${bubbleId}`);
+    if (container) {
+        if (container.style.display === 'none') {
+            container.style.display = 'block';
+            container.classList.add('fade-in');
+        } else {
+            container.style.display = 'none';
+        }
+    }
+};
+
+function updateWidgetCountBtn(bubbleId, type) {
+    const containerPrefix = type === 'flashcard' ? 'flashcards' : 'quiz';
+    const container = document.getElementById(`${containerPrefix}-container-${bubbleId}`);
+    if (!container) return;
+    
+    const count = container.querySelectorAll('.widget-set').length;
+    let btn = document.getElementById(`view-${type}-btn-${bubbleId}`);
+    
+    if (count > 0) {
+        if (!btn) {
+            const actions = container.previousElementSibling; 
+            btn = document.createElement("button");
+            btn.className = "flashcard-subtle-btn view-btn";
+            btn.id = `view-${type}-btn-${bubbleId}`;
+            btn.onclick = () => toggleWidgets(bubbleId, containerPrefix);
+            actions.appendChild(btn);
+        }
+        btn.innerHTML = `<i class="ri-eye-line"></i> View ${type === 'flashcard' ? 'Flashcards' : 'Quizzes'} (${count})`;
+    }
 }
 
 // ------------------------------------
 // Flashcard Logic
 // ------------------------------------
-async function generateFlashcards(bubbleId, text) {
-    const btn = document.getElementById(`btn-${bubbleId}`);
-    const container = document.getElementById(`flashcards-${bubbleId}`);
+async function generateFlashcards(bubbleId, text, messageId) {
+    if (!messageId) {
+        alert("Cannot generate flashcards for an unsaved message.");
+        return;
+    }
+    const btn = document.getElementById(`btn-flashcard-${bubbleId}`);
+    const container = document.getElementById(`flashcards-container-${bubbleId}`);
     if (!btn || !container) return;
 
-    btn.innerHTML = `<i class="ri-loader-4-line ri-spin"></i> Generating...`;
+    if (container.querySelectorAll('.widget-set').length >= 5) {
+        alert("Maximum limit reached: You can only generate up to 5 flashcard sets per message.");
+        return;
+    }
+
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = `<i class="ri-loader-4-line ri-spin"></i>`;
     btn.disabled = true;
+    btn.classList.add("loading");
 
     try {
         const res = await fetch("http://127.0.0.1:5000/api/flashcards", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: text })
+            body: JSON.stringify({ text: text, message_id: messageId })
         });
         
         const data = await res.json();
         
         if (data.flashcards && data.flashcards.length > 0) {
-            btn.style.display = 'none'; // hide the button
-            renderFlashcards(data.flashcards, container);
-        } else {
-            btn.innerHTML = `<i class="ri-error-warning-line"></i> Failed. Retry?`;
+            btn.innerHTML = originalHtml;
             btn.disabled = false;
+            btn.classList.remove("loading");
+            
+            // Append the new widget
+            const newWidget = { id: data.widget_id, data: data.flashcards };
+            container.style.display = 'block'; // auto open
+            appendSavedFlashcard(newWidget, container);
+        } else {
+            btn.innerHTML = `<i class="ri-error-warning-line"></i> Retry`;
+            btn.disabled = false;
+            btn.classList.remove("loading");
         }
     } catch (err) {
         console.error(err);
-        btn.innerHTML = `<i class="ri-error-warning-line"></i> Failed. Retry?`;
+        btn.innerHTML = `<i class="ri-error-warning-line"></i> Retry`;
         btn.disabled = false;
+        btn.classList.remove("loading");
     }
+}
+
+function renderSavedFlashcards(widgets, container) {
+    container.innerHTML = '';
+    widgets.forEach((w, idx) => {
+        appendSavedFlashcard(w, container, idx + 1);
+    });
+}
+
+function appendSavedFlashcard(widget, container, setNumber = null) {
+    const setNum = setNumber || (container.querySelectorAll('.widget-set').length + 1);
+    const div = document.createElement('div');
+    div.className = 'widget-set';
+    div.innerHTML = `<div class="widget-set-title">Flashcard Set ${setNum}</div><div id="fc-set-${widget.id}"></div>`;
+    container.appendChild(div);
+    renderFlashcards(widget.data, document.getElementById(`fc-set-${widget.id}`));
+    
+    const bubbleId = container.id.replace('flashcards-container-', '');
+    updateWidgetCountBtn(bubbleId, 'flashcard');
 }
 
 function renderFlashcards(cards, container, startIndex = 0) {
@@ -470,36 +573,271 @@ window.changeFlashcard = function(event, direction, containerId) {
     }
 };
 
+// ------------------------------------
+// Quiz Logic
+// ------------------------------------
+async function generateQuiz(bubbleId, text, messageId) {
+    if (!messageId) {
+        alert("Cannot generate quiz for an unsaved message.");
+        return;
+    }
+    const btn = document.getElementById(`btn-quiz-${bubbleId}`);
+    const container = document.getElementById(`quiz-container-${bubbleId}`);
+    if (!btn || !container) return;
+
+    if (container.querySelectorAll('.widget-set').length >= 5) {
+        alert("Maximum limit reached: You can only generate up to 5 quiz sets per message.");
+        return;
+    }
+
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = `<i class="ri-loader-4-line ri-spin"></i>`;
+    btn.disabled = true;
+    btn.classList.add("loading");
+
+    try {
+        const res = await fetch("http://127.0.0.1:5000/api/quiz", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: text, message_id: messageId })
+        });
+        
+        const data = await res.json();
+        
+        if (data.quiz && data.quiz.length > 0) {
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+            btn.classList.remove("loading");
+            
+            const newWidget = { id: data.widget_id, data: data.quiz, state: null };
+            container.style.display = 'block';
+            appendSavedQuiz(newWidget, container);
+        } else {
+            btn.innerHTML = `<i class="ri-error-warning-line"></i> Retry`;
+            btn.disabled = false;
+            btn.classList.remove("loading");
+        }
+    } catch (err) {
+        console.error(err);
+        btn.innerHTML = `<i class="ri-error-warning-line"></i> Retry`;
+        btn.disabled = false;
+        btn.classList.remove("loading");
+    }
+}
+
+function renderSavedQuizzes(widgets, container) {
+    container.innerHTML = '';
+    widgets.forEach((w, idx) => {
+        appendSavedQuiz(w, container, idx + 1);
+    });
+}
+
+function appendSavedQuiz(widget, container, setNumber = null) {
+    const setNum = setNumber || (container.querySelectorAll('.widget-set').length + 1);
+    const div = document.createElement('div');
+    div.className = 'widget-set';
+    div.innerHTML = `<div class="widget-set-title">Quiz Set ${setNum}</div><div id="qz-set-${widget.id}"></div>`;
+    container.appendChild(div);
+    
+    if (widget.state && widget.state.completed) {
+        renderQuiz(widget.data, document.getElementById(`qz-set-${widget.id}`), 0, widget.id, widget.state.userAnswers, widget.state.score, true);
+    } else {
+        renderQuiz(widget.data, document.getElementById(`qz-set-${widget.id}`), 0, widget.id);
+    }
+    
+    const bubbleId = container.id.replace('quiz-container-', '');
+    updateWidgetCountBtn(bubbleId, 'quiz');
+}
+
+function renderQuiz(questions, container, currentIndex = 0, widgetId = null, userAnswers = [], score = 0, isReviewMode = false) {
+    if (currentIndex >= questions.length) {
+        let retakeBtnHtml = isReviewMode ? 
+            `<button class="flashcard-subtle-btn" style="margin-top:15px; border-color: rgba(255,255,255,0.2);" onclick="renderQuiz(JSON.parse(this.dataset.questions), document.getElementById('${container.id}'), 0, ${widgetId}, [], 0, false)" data-questions='${JSON.stringify(questions).replace(/'/g, "&apos;")}'>
+                <i class="ri-refresh-line"></i> Retake Quiz
+            </button>` :
+            `<button class="flashcard-subtle-btn" style="margin-top:15px; border-color: rgba(255,255,255,0.2);" onclick="renderQuiz(JSON.parse(this.dataset.questions), document.getElementById('${container.id}'), 0, ${widgetId}, JSON.parse('${JSON.stringify(userAnswers)}'), ${score}, true)" data-questions='${JSON.stringify(questions).replace(/'/g, "&apos;")}'>
+                <i class="ri-eye-line"></i> Review Answers
+            </button>`;
+
+        container.innerHTML = `
+            <div class="quiz-container">
+                <div class="quiz-completed" style="text-align: center; padding: 20px;">
+                    <i class="ri-check-double-line" style="font-size: 2.5rem; color: #4ade80;"></i>
+                    <p style="margin-top: 10px; font-weight: 500;">Quiz Completed!</p>
+                    <p style="font-size: 1.2rem; margin-top: 10px; color: var(--primary-accent);">Score: ${score} / ${questions.length}</p>
+                    ${retakeBtnHtml}
+                </div>
+            </div>
+        `;
+        
+        if (widgetId && !isReviewMode) {
+            const state = { completed: true, score: score, total: questions.length, userAnswers: userAnswers };
+            fetch(`http://127.0.0.1:5000/api/widgets/${widgetId}/state`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(state)
+            }).catch(e => console.error(e));
+        }
+        return;
+    }
+
+    const q = questions[currentIndex];
+    let optionsHtml = '';
+    
+    const userSelectedIdx = isReviewMode ? userAnswers[currentIndex] : null;
+
+    q.options.forEach((opt, idx) => {
+        let cls = "quiz-option";
+        
+        if (isReviewMode) {
+            if (idx === q.answer) cls += " correct";
+            else if (idx === userSelectedIdx && idx !== q.answer) cls += " incorrect";
+        }
+        
+        optionsHtml += `
+            <div class="${cls}" onclick="${isReviewMode ? '' : `checkQuizAnswer(this, ${idx}, ${q.answer}, '${container.id}')`}">
+                ${opt}
+            </div>
+        `;
+    });
+
+    let navControls = '';
+    if (isReviewMode) {
+        navControls = `
+            <button onclick="changeQuizQuestion('${container.id}', -1)" ${currentIndex === 0 ? 'disabled style="opacity:0.5"' : ''}><i class="ri-arrow-left-s-line"></i> Prev</button>
+            <div style="flex:1"></div>
+            <button onclick="changeQuizQuestion('${container.id}', 1)">Next <i class="ri-arrow-right-s-line"></i></button>
+        `;
+    } else {
+        navControls = `
+            <div style="flex:1"></div>
+            <button onclick="changeQuizQuestion('${container.id}', 1)">Next <i class="ri-arrow-right-s-line"></i></button>
+        `;
+    }
+
+    container.innerHTML = `
+        <div class="quiz-container">
+            <div class="quiz-indicator">${isReviewMode ? 'Reviewing ' : ''}Question ${currentIndex + 1} of ${questions.length}</div>
+            <div class="quiz-question">${q.question}</div>
+            <div class="quiz-options ${isReviewMode ? 'answered' : ''}">
+                ${optionsHtml}
+            </div>
+            <div class="quiz-controls" style="${isReviewMode ? 'display: flex;' : 'display: none;'}">
+                ${navControls}
+            </div>
+        </div>
+    `;
+    
+    container.dataset.currentIndex = currentIndex;
+    container.dataset.questions = JSON.stringify(questions);
+    container.dataset.widgetId = widgetId;
+    container.dataset.userAnswers = JSON.stringify(userAnswers);
+    container.dataset.score = score;
+    container.dataset.isReviewMode = isReviewMode;
+}
+
+window.checkQuizAnswer = function(element, selectedIdx, correctIdx, containerId) {
+    if (element.parentNode.classList.contains('answered')) return;
+    
+    const options = element.parentNode.querySelectorAll('.quiz-option');
+    element.parentNode.classList.add('answered');
+    
+    const container = document.getElementById(containerId);
+    let userAnswers = JSON.parse(container.dataset.userAnswers || "[]");
+    userAnswers.push(selectedIdx);
+    container.dataset.userAnswers = JSON.stringify(userAnswers);
+    
+    if (selectedIdx === correctIdx) {
+        element.classList.add('correct');
+        container.dataset.score = parseInt(container.dataset.score || 0) + 1;
+    } else {
+        element.classList.add('incorrect');
+        options[correctIdx].classList.add('correct');
+    }
+    
+    const controls = container.querySelector('.quiz-controls');
+    if (controls) controls.style.display = 'flex';
+};
+
+window.changeQuizQuestion = function(containerId, direction) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    
+    let currentIndex = parseInt(container.dataset.currentIndex);
+    const questions = JSON.parse(container.dataset.questions);
+    const widgetId = container.dataset.widgetId !== "null" ? parseInt(container.dataset.widgetId) : null;
+    const userAnswers = JSON.parse(container.dataset.userAnswers || "[]");
+    const score = parseInt(container.dataset.score || 0);
+    const isReviewMode = container.dataset.isReviewMode === 'true';
+    
+    currentIndex += direction;
+    renderQuiz(questions, container, currentIndex, widgetId, userAnswers, score, isReviewMode);
+};
+
 // Fetch session history list
 async function fetchSessions() {
     try {
         const res = await fetch("http://127.0.0.1:5000/api/sessions");
         const data = await res.json();
         
-        historyList.innerHTML = `<div style="padding: 10px; color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; margin-top: 10px;">Recent</div>`;
+        historyList.innerHTML = '';
         
-        if (data.sessions) {
+        if (data.sessions && data.sessions.length > 0) {
+            const grouped = {};
             data.sessions.forEach(session => {
-                const div = document.createElement("div");
-                div.className = "history-item";
-                div.dataset.sessionId = String(session.id);
-                if (session.id === currentSessionId) div.classList.add("active");
+                let dateStr = "Older";
+                if (session.created_at) {
+                    // SQLite CURRENT_TIMESTAMP is UTC
+                    const d = new Date(session.created_at + 'Z');
+                    if (!isNaN(d)) {
+                        const today = new Date();
+                        const isToday = d.toDateString() === today.toDateString();
+                        const yesterday = new Date();
+                        yesterday.setDate(yesterday.getDate() - 1);
+                        const isYesterday = d.toDateString() === yesterday.toDateString();
+                        
+                        const daysAgo = Math.floor((today - d) / (1000 * 60 * 60 * 24));
+                        
+                        if (isToday) dateStr = "Today";
+                        else if (isYesterday) dateStr = "Yesterday";
+                        else if (daysAgo < 7) dateStr = "Previous 7 Days";
+                        else dateStr = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+                    }
+                }
                 
-                div.innerHTML = `
-                    <div class="history-item-title">${session.title}</div>
-                    <div class="delete-chat-btn" onclick="deleteSession(event, ${session.id})">
-                        <i class="ri-delete-bin-line"></i>
-                    </div>
-                `;
-                
-                div.onclick = (e) => {
-                    // Prevent triggering if delete button was clicked
-                    if (e.target.closest('.delete-chat-btn')) return;
-                    loadSession(session.id, session.title);
-                    if(window.innerWidth <= 768) closeSidebar();
-                };
-                historyList.appendChild(div);
+                if (!grouped[dateStr]) grouped[dateStr] = [];
+                grouped[dateStr].push(session);
             });
+            
+            for (const [dateGroup, sessions] of Object.entries(grouped)) {
+                const header = document.createElement("div");
+                header.className = "history-date-header";
+                header.textContent = dateGroup;
+                historyList.appendChild(header);
+                
+                sessions.forEach(session => {
+                    const div = document.createElement("div");
+                    div.className = "history-item";
+                    div.dataset.sessionId = String(session.id);
+                    if (session.id === currentSessionId) div.classList.add("active");
+                    
+                    div.innerHTML = `
+                        <div class="history-item-title">${session.title}</div>
+                        <div class="delete-chat-btn" onclick="deleteSession(event, ${session.id})">
+                            <i class="ri-delete-bin-line"></i>
+                        </div>
+                    `;
+                    
+                    div.onclick = (e) => {
+                        if (e.target.closest('.delete-chat-btn')) return;
+                        loadSession(session.id, session.title);
+                        if(window.innerWidth <= 768) closeSidebar();
+                    };
+                    historyList.appendChild(div);
+                });
+            }
+        } else {
+             historyList.innerHTML = `<div style="padding: 20px; text-align:center; color: var(--text-muted); font-size: 0.9rem;">No chats yet</div>`;
         }
     } catch (err) {
         console.error("Error fetching sessions:", err);
@@ -535,7 +873,7 @@ async function loadSession(sessionId, title) {
         const data = await res.json();
         if (data.messages) {
             data.messages.forEach(msg => {
-                appendMessage(msg.text, msg.sender);
+                appendMessage(msg.text, msg.sender, [], msg.id, msg.widgets || []);
             });
         }
     } catch (err) {
@@ -659,7 +997,7 @@ async function sendMessage(retryText = null) {
             // Still on the same chat — update UI directly
             typingIndicator.remove();
             if (data.response) {
-                appendMessage(data.response, "ai", data.sources || []);
+                appendMessage(data.response, "ai", data.sources || [], data.message_id, []);
             }
             if (data.session_id && currentSessionId !== data.session_id) {
                 currentSessionId = data.session_id;

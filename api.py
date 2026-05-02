@@ -230,16 +230,24 @@ def generate_flashcards(text):
         ]
         response = llm.invoke(messages)
         content = response.content.strip()
-        # Clean up in case LLM added markdown block wrappers
-        if content.startswith("```json"):
-            content = content[7:]
-        elif content.startswith("```"):
-            content = content[3:]
-        if content.endswith("```"):
-            content = content[:-3]
-        
         import json
-        cards = json.loads(content.strip())
+        import re
+        
+        # Robustly extract JSON array using regex
+        match = re.search(r'\[\s*\{.*\}\s*\]', content, re.DOTALL)
+        if match:
+            json_str = match.group(0)
+        else:
+            # Fallback cleanup
+            json_str = content.strip()
+            if json_str.startswith("```json"):
+                json_str = json_str[7:]
+            elif json_str.startswith("```"):
+                json_str = json_str[3:]
+            if json_str.endswith("```"):
+                json_str = json_str[:-3]
+        
+        cards = json.loads(json_str.strip())
         return cards
     except Exception as e:
         print(f"Error generating flashcards: {e}")
@@ -260,5 +268,55 @@ def generate_flashcards(text):
 # # ----------------------------
 # # Disabled terminal chat (handled by Flask)
 # # ----------------------------
+# ----------------------------
+# Helper: Generate Quiz
+# ----------------------------
+def generate_quiz(text):
+    system_prompt = """
+    You are an AI tutor tool designed to extract key concepts from educational text and convert them into a multiple-choice quiz.
+    Extract the most important facts or concepts from the provided text and formulate 3 Multiple-Choice Questions (MCQs).
+    You MUST output valid JSON only. Do not wrap it in markdown code blocks.
+    The JSON structure MUST be an array of objects, exactly like this:
+    [
+        {
+            "question": "What is the capital of France?",
+            "options": ["London", "Berlin", "Paris", "Madrid"],
+            "answer": 2
+        }
+    ]
+    IMPORTANT: The 'answer' field must be an integer representing the 0-based index of the correct option in the 'options' array.
+    Limit to exactly 3 questions.
+    """
+    try:
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=f"Extract a quiz from this text:\n\n{text}")
+        ]
+        response = llm.invoke(messages)
+        content = response.content.strip()
+        
+        import json
+        import re
+        
+        # Robustly extract JSON array using regex
+        match = re.search(r'\[\s*\{.*\}\s*\]', content, re.DOTALL)
+        if match:
+            json_str = match.group(0)
+        else:
+            # Fallback cleanup
+            json_str = content.strip()
+            if json_str.startswith("```json"):
+                json_str = json_str[7:]
+            elif json_str.startswith("```"):
+                json_str = json_str[3:]
+            if json_str.endswith("```"):
+                json_str = json_str[:-3]
+        
+        quiz_data = json.loads(json_str.strip())
+        return quiz_data
+    except Exception as e:
+        print(f"Error generating quiz: {e}")
+        return []
+
 if __name__ == "__main__":
     print("✅ API module loaded. Flask will handle all interactions.")

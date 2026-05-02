@@ -290,23 +290,43 @@ header {
 }
 
 /* Flashcard UI */
-.flashcard-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: var(--primary-accent);
-    color: white;
-    border: none;
-    padding: 6px 12px;
-    border-radius: 6px;
-    font-size: 0.8rem;
-    cursor: pointer;
-    margin-top: 12px;
-    transition: background 0.2s;
+.msg-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed rgba(128, 128, 128, 0.2);
+    opacity: 0.6;
+    transition: opacity 0.2s;
 }
 
-.flashcard-btn:hover {
-    background: var(--primary-hover);
+.msg-wrapper:hover .msg-actions {
+    opacity: 1;
+}
+
+.flashcard-subtle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border-color);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.flashcard-subtle-btn:hover {
+    background: var(--hover-overlay);
+    color: var(--text-main);
+    border-color: var(--primary-accent);
+}
+
+.flashcard-subtle-btn.loading {
+    color: var(--primary-accent);
+    border-color: var(--primary-accent);
 }
 
 .flashcard-container {
@@ -389,4 +409,152 @@ header {
 .flashcard-indicator {
     font-size: 0.85rem;
     color: var(--text-muted);
+}
+
+/* Quiz UI */
+.quiz-container {
+    margin-top: 15px;
+    padding: 20px;
+    background: var(--sidebar-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 4px 15px var(--shadow-color);
+    width: 100%;
+    max-width: 500px;
+}
+
+.quiz-indicator {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+}
+
+.quiz-question {
+    font-size: 1.05rem;
+    font-weight: 500;
+    color: var(--text-main);
+    margin-bottom: 16px;
+    line-height: 1.4;
+}
+
+.quiz-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.quiz-option {
+    padding: 12px 16px;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    transition: all 0.2s;
+    color: var(--text-main);
+}
+
+.quiz-options:not(.answered) .quiz-option:hover {
+    border-color: var(--primary-accent);
+    background: rgba(99, 102, 241, 0.05);
+}
+
+.quiz-options.answered .quiz-option {
+    cursor: default;
+    opacity: 0.7;
+}
+
+.quiz-option.correct {
+    background: rgba(74, 222, 128, 0.1) !important;
+    border-color: #4ade80 !important;
+    color: #4ade80 !important;
+    opacity: 1 !important;
+}
+
+.quiz-option.incorrect {
+    background: rgba(248, 113, 113, 0.1) !important;
+    border-color: #f87171 !important;
+    color: #f87171 !important;
+    opacity: 1 !important;
+}
+
+.quiz-controls {
+    display: flex;
+    margin-top: 16px;
+    justify-content: flex-end;
+}
+
+.quiz-controls button {
+    background: var(--primary-accent);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.quiz-controls button:hover {
+    background: var(--primary-hover);
+}
+
+/* Widget Display and Sets */
+.widget-display-container {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed rgba(128, 128, 128, 0.2);
+}
+
+.widget-set {
+    margin-bottom: 20px;
+}
+
+.widget-set-title {
+    font-size: 0.85rem;
+    color: var(--primary-accent);
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+}
+
+.view-btn {
+    border-color: rgba(99, 102, 241, 0.3) !important;
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Quiz Review Mode */
+.review-mode .quiz-review-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.review-mode h3 {
+    margin: 0;
+    color: var(--text-main);
+    font-size: 1.2rem;
+}
+
+.quiz-review-qblock {
+    margin-bottom: 25px;
+}
+
+.quiz-review-qblock:last-child {
+    margin-bottom: 0;
 }

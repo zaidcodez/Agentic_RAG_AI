@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from api import load_and_store, answer_query
 import os
@@ -7,7 +7,7 @@ import database
 # ----------------------------
 # Flask setup
 # ----------------------------
-app = Flask(__name__, static_folder=".", static_url_path="")
+app = Flask(__name__)
 CORS(app)
 
 # Initialize database
@@ -18,7 +18,7 @@ database.init_db()
 # ----------------------------
 @app.route("/")
 def serve_html():
-    return send_from_directory(".", "index.html")
+    return render_template("index.html")
 
 # ----------------------------
 # Session management endpoints
@@ -90,12 +90,13 @@ def chat():
         # Save BOTH messages ONLY after generation succeeds
         # This prevents DB corruption if the user aborts the request
         database.add_message(session_id, "user", query)
-        database.add_message(session_id, "ai", response_text)
+        ai_msg_id = database.add_message(session_id, "ai", response_text)
 
         # Return response, session_id, and sources
         return jsonify({
             "response": response_text,
             "session_id": session_id,
+            "message_id": ai_msg_id,
             "sources": sources
         })
 
@@ -110,15 +111,54 @@ def chat():
 def flashcards():
     try:
         data = request.get_json()
-        if not data or "text" not in data:
-            return jsonify({"error": "Missing 'text' in request"}), 400
+        if not data or "text" not in data or "message_id" not in data:
+            return jsonify({"error": "Missing 'text' or 'message_id' in request"}), 400
 
         from api import generate_flashcards
         cards = generate_flashcards(data["text"])
-        return jsonify({"flashcards": cards})
+        if cards:
+            widget_id = database.add_widget(data["message_id"], "flashcard", cards)
+            return jsonify({"flashcards": cards, "widget_id": widget_id})
+        else:
+            return jsonify({"error": "Failed to generate flashcards"}), 500
 
     except Exception as e:
         print("❌ Error in /api/flashcards:", e)
+        return jsonify({"error": str(e)}), 500
+
+# ----------------------------
+# Quiz endpoint
+# ----------------------------
+@app.route("/api/quiz", methods=["POST"])
+def quiz():
+    try:
+        data = request.get_json()
+        if not data or "text" not in data or "message_id" not in data:
+            return jsonify({"error": "Missing 'text' or 'message_id' in request"}), 400
+
+        from api import generate_quiz
+        quiz_data = generate_quiz(data["text"])
+        if quiz_data:
+            widget_id = database.add_widget(data["message_id"], "quiz", quiz_data)
+            return jsonify({"quiz": quiz_data, "widget_id": widget_id})
+        else:
+            return jsonify({"error": "Failed to generate quiz"}), 500
+
+    except Exception as e:
+        print("❌ Error in /api/quiz:", e)
+        return jsonify({"error": str(e)}), 500
+
+# ----------------------------
+# Widget State endpoint
+# ----------------------------
+@app.route("/api/widgets/<int:widget_id>/state", methods=["PUT"])
+def update_widget_state(widget_id):
+    try:
+        state_data = request.get_json()
+        database.update_widget_state(widget_id, state_data)
+        return jsonify({"message": "State updated"})
+    except Exception as e:
+        print("❌ Error in /api/widgets/state:", e)
         return jsonify({"error": str(e)}), 500
 
 # ----------------------------
