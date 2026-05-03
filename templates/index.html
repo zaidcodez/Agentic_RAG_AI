@@ -64,6 +64,21 @@
 
         <div id="input-wrapper">
             <div class="input-box">
+                <div id="pinned-context-container" class="pinned-context-container"></div>
+                <div id="upload-container" class="upload-container" style="display: none;">
+                    <div class="upload-file-info">
+                        <i class="ri-file-text-line"></i>
+                        <span id="upload-filename">filename.pdf</span>
+                    </div>
+                    <div class="upload-progress-wrapper">
+                        <svg class="upload-progress-ring" viewBox="0 0 36 36">
+                            <path class="ring-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                            <path class="ring-fill" id="upload-ring" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                        </svg>
+                        <span id="upload-percentage">0%</span>
+                    </div>
+                    <button id="cancel-upload-btn" title="Cancel Upload"><i class="ri-close-line"></i></button>
+                </div>
                 <div class="input-main-row">
                     <button class="action-btn" id="plusBtn" title="More Tools">
                         <i class="ri-add-line"></i>
@@ -96,6 +111,7 @@
                         </div>
                         <i class="ri-arrow-right-s-line"></i>
                     </button>
+                    <span class="concept-check-trigger" id="globalConceptCheckBtn" onclick="triggerGlobalConceptCheck()">generate concept check for this</span>
                 </div>
             </div>
         </div>

@@ -402,30 +402,39 @@ function appendMessage(text, sender, sources = [], messageId = null, widgets = [
         
         const flashcardWidgets = widgets.filter(w => w.widget_type === 'flashcard');
         const quizWidgets = widgets.filter(w => w.widget_type === 'quiz');
+        const conceptWidgets = widgets.filter(w => w.widget_type === 'concept_check');
+        
+        const totalMaterials = flashcardWidgets.length + quizWidgets.length + conceptWidgets.length;
 
-        let viewFlashcardsBtn = flashcardWidgets.length > 0 ? 
-            `<button class="flashcard-subtle-btn view-btn" id="view-flashcard-btn-${bubbleId}" onclick="toggleWidgets('${bubbleId}', 'flashcards')" title="View Saved Flashcards">
-                <i class="ri-eye-line"></i> View Flashcards (${flashcardWidgets.length})
-            </button>` : "";
-            
-        let viewQuizBtn = quizWidgets.length > 0 ? 
-            `<button class="flashcard-subtle-btn view-btn" id="view-quiz-btn-${bubbleId}" onclick="toggleWidgets('${bubbleId}', 'quiz')" title="View Saved Quizzes">
-                <i class="ri-eye-line"></i> View Quizzes (${quizWidgets.length})
+        let viewMaterialsBtn = totalMaterials > 0 ? 
+            `<button class="flashcard-subtle-btn view-btn" id="view-materials-btn-${bubbleId}" onclick="toggleMaterials('${bubbleId}')" title="Review Materials">
+                <i class="ri-eye-line"></i> Review Materials (<span id="materials-count-${bubbleId}">${totalMaterials}</span>)
             </button>` : "";
 
         actionsHtml = `
             <div class="msg-actions">
                 <button class="flashcard-subtle-btn" data-text="${encodedText}" onclick="generateFlashcards('${bubbleId}', this.dataset.text, ${messageId})" id="btn-flashcard-${bubbleId}" title="Generate Flashcards">
-                    <i class="ri-stack-line"></i> Generate Flashcards
+                    <i class="ri-stack-line"></i> Flashcards
                 </button>
                 <button class="flashcard-subtle-btn" data-text="${encodedText}" onclick="generateQuiz('${bubbleId}', this.dataset.text, ${messageId})" id="btn-quiz-${bubbleId}" title="Generate Quiz">
-                    <i class="ri-questionnaire-line"></i> Generate Quiz
+                    <i class="ri-questionnaire-line"></i> Quiz
                 </button>
-                ${viewFlashcardsBtn}
-                ${viewQuizBtn}
+                <button class="flashcard-subtle-btn" data-text="${encodedText}" onclick="pinContext('${bubbleId}', this.dataset.text, ${messageId})" id="btn-pin-${bubbleId}" title="Pin Context">
+                    <i class="ri-pushpin-line"></i> Pin Context
+                </button>
+                ${viewMaterialsBtn}
             </div>
-            <div id="flashcards-container-${bubbleId}" class="widget-display-container" style="display: none;"></div>
-            <div id="quiz-container-${bubbleId}" class="widget-display-container" style="display: none;"></div>
+            
+            <div id="materials-container-${bubbleId}" class="materials-container widget-display-container" style="display: none;">
+                <div class="materials-tabs">
+                    <button class="material-tab active" onclick="switchMaterialTab('${bubbleId}', 'flashcards')" id="tab-flashcards-${bubbleId}">Flashcards</button>
+                    <button class="material-tab" onclick="switchMaterialTab('${bubbleId}', 'quiz')" id="tab-quiz-${bubbleId}">Quizzes</button>
+                    <button class="material-tab" onclick="switchMaterialTab('${bubbleId}', 'concept')" id="tab-concept-${bubbleId}">Concept Checks</button>
+                </div>
+                <div id="flashcards-container-${bubbleId}" class="material-content" style="display: block;"></div>
+                <div id="quiz-container-${bubbleId}" class="material-content" style="display: none;"></div>
+                <div id="concept-container-${bubbleId}" class="material-content" style="display: none;"></div>
+            </div>
         `;
     }
 
@@ -444,17 +453,21 @@ function appendMessage(text, sender, sources = [], messageId = null, widgets = [
     if (sender === 'ai') {
         const fContainer = document.getElementById(`flashcards-container-${bubbleId}`);
         const qContainer = document.getElementById(`quiz-container-${bubbleId}`);
+        const cContainer = document.getElementById(`concept-container-${bubbleId}`);
         if (fContainer && widgets.filter(w => w.widget_type === 'flashcard').length > 0) {
             renderSavedFlashcards(widgets.filter(w => w.widget_type === 'flashcard'), fContainer);
         }
         if (qContainer && widgets.filter(w => w.widget_type === 'quiz').length > 0) {
             renderSavedQuizzes(widgets.filter(w => w.widget_type === 'quiz'), qContainer);
         }
+        if (cContainer && widgets.filter(w => w.widget_type === 'concept_check').length > 0) {
+            renderSavedConceptChecks(widgets.filter(w => w.widget_type === 'concept_check'), cContainer);
+        }
     }
 }
 
-window.toggleWidgets = function(bubbleId, prefix) {
-    const container = document.getElementById(`${prefix}-container-${bubbleId}`);
+window.toggleMaterials = function(bubbleId) {
+    const container = document.getElementById(`materials-container-${bubbleId}`);
     if (container) {
         if (container.style.display === 'none') {
             container.style.display = 'block';
@@ -465,24 +478,48 @@ window.toggleWidgets = function(bubbleId, prefix) {
     }
 };
 
-function updateWidgetCountBtn(bubbleId, type) {
-    const containerPrefix = type === 'flashcard' ? 'flashcards' : 'quiz';
-    const container = document.getElementById(`${containerPrefix}-container-${bubbleId}`);
-    if (!container) return;
+window.switchMaterialTab = function(bubbleId, tabName) {
+    const tabs = ['flashcards', 'quiz', 'concept'];
+    tabs.forEach(t => {
+        const tabBtn = document.getElementById(`tab-${t}-${bubbleId}`);
+        const content = document.getElementById(`${t}-container-${bubbleId}`);
+        if (tabBtn && content) {
+            if (t === tabName) {
+                tabBtn.classList.add('active');
+                content.style.display = 'block';
+            } else {
+                tabBtn.classList.remove('active');
+                content.style.display = 'none';
+            }
+        }
+    });
+};
+
+function updateWidgetCountBtn(bubbleId) {
+    const materialsContainer = document.getElementById(`materials-container-${bubbleId}`);
+    if (!materialsContainer) return;
     
-    const count = container.querySelectorAll('.widget-set').length;
-    let btn = document.getElementById(`view-${type}-btn-${bubbleId}`);
+    let totalCount = 0;
+    const fContainer = document.getElementById(`flashcards-container-${bubbleId}`);
+    const qContainer = document.getElementById(`quiz-container-${bubbleId}`);
+    const cContainer = document.getElementById(`concept-container-${bubbleId}`);
     
-    if (count > 0) {
+    if (fContainer) totalCount += fContainer.querySelectorAll('.widget-set').length;
+    if (qContainer) totalCount += qContainer.querySelectorAll('.widget-set').length;
+    if (cContainer) totalCount += cContainer.querySelectorAll('.widget-set').length;
+    
+    let btn = document.getElementById(`view-materials-btn-${bubbleId}`);
+    
+    if (totalCount > 0) {
         if (!btn) {
-            const actions = container.previousElementSibling; 
+            const actions = materialsContainer.previousElementSibling; 
             btn = document.createElement("button");
             btn.className = "flashcard-subtle-btn view-btn";
-            btn.id = `view-${type}-btn-${bubbleId}`;
-            btn.onclick = () => toggleWidgets(bubbleId, containerPrefix);
+            btn.id = `view-materials-btn-${bubbleId}`;
+            btn.onclick = () => toggleMaterials(bubbleId);
             actions.appendChild(btn);
         }
-        btn.innerHTML = `<i class="ri-eye-line"></i> View ${type === 'flashcard' ? 'Flashcards' : 'Quizzes'} (${count})`;
+        btn.innerHTML = `<i class="ri-eye-line"></i> Review Materials (<span id="materials-count-${bubbleId}">${totalCount}</span>)`;
     }
 }
 
@@ -555,7 +592,7 @@ function appendSavedFlashcard(widget, container, setNumber = null) {
     renderFlashcards(widget.data, document.getElementById(`fc-set-${widget.id}`));
     
     const bubbleId = container.id.replace('flashcards-container-', '');
-    updateWidgetCountBtn(bubbleId, 'flashcard');
+    updateWidgetCountBtn(bubbleId);
 }
 
 function renderFlashcards(cards, container, startIndex = 0) {
@@ -680,7 +717,7 @@ function appendSavedQuiz(widget, container, setNumber = null) {
     }
     
     const bubbleId = container.id.replace('quiz-container-', '');
-    updateWidgetCountBtn(bubbleId, 'quiz');
+    updateWidgetCountBtn(bubbleId);
 }
 
 function renderQuiz(questions, container, currentIndex = 0, widgetId = null, userAnswers = [], score = 0, isReviewMode = false) {
@@ -806,6 +843,331 @@ window.changeQuizQuestion = function(containerId, direction) {
     
     currentIndex += direction;
     renderQuiz(questions, container, currentIndex, widgetId, userAnswers, score, isReviewMode);
+};
+
+// ------------------------------------
+// Concept Check Logic
+// ------------------------------------
+let pinnedContexts = [];
+
+window.pinContext = function(bubbleId, text, messageId) {
+    if (pinnedContexts.length >= 2) {
+        alert("You can only pin up to 2 messages for context.");
+        return;
+    }
+    if (pinnedContexts.find(p => p.messageId === messageId)) return;
+    
+    pinnedContexts.push({ bubbleId, text, messageId });
+    renderPinnedContexts();
+};
+
+window.unpinContext = function(messageId) {
+    pinnedContexts = pinnedContexts.filter(p => p.messageId !== messageId);
+    renderPinnedContexts();
+};
+
+function renderPinnedContexts() {
+    const container = document.getElementById("pinned-context-container");
+    if (!container) return;
+    
+    if (pinnedContexts.length === 0) {
+        container.style.display = "none";
+        container.innerHTML = "";
+        return;
+    }
+    
+    container.style.display = "flex";
+    container.innerHTML = pinnedContexts.map(p => `
+        <div class="pinned-bubble">
+            <div class="pinned-text">${p.text.substring(0, 60)}${p.text.length > 60 ? '...' : ''}</div>
+            <button onclick="unpinContext(${p.messageId})"><i class="ri-close-line"></i></button>
+        </div>
+    `).join("");
+}
+
+window.triggerGlobalConceptCheck = async function() {
+    const queryInput = document.getElementById('query');
+    const sendBtn = document.getElementById('sendBtn');
+    const text = queryInput.value.trim();
+    
+    if (pinnedContexts.length === 0 && !text) {
+        // Just return, do not send empty message
+        return;
+    }
+
+    let combinedText = pinnedContexts.map(p => p.text).join("\n\n");
+    if (text) {
+        combinedText += (combinedText ? "\n\nAdditional Context:\n" : "") + text;
+    }
+    
+    const btn = document.getElementById('globalConceptCheckBtn');
+    const originalText = btn.innerText;
+    btn.innerHTML = `<i class="ri-loader-4-line ri-spin"></i> Checking...`;
+    btn.style.pointerEvents = "none";
+    queryInput.disabled = true;
+    if (sendBtn) sendBtn.disabled = true;
+    
+    try {
+        const res = await fetch("http://127.0.0.1:5000/api/concept_check/generate_global", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: combinedText, session_id: currentSessionId })
+        });
+        
+        const data = await res.json();
+        
+        if (data.error) {
+            btn.innerText = originalText;
+            btn.style.pointerEvents = "auto";
+            queryInput.disabled = false;
+            if (sendBtn) sendBtn.disabled = false;
+            appendSystemMessage(data.error);
+            return;
+        }
+        
+        if (data.questions && data.questions.length > 0) {
+            btn.innerText = originalText;
+            btn.style.pointerEvents = "auto";
+            queryInput.disabled = false;
+            if (sendBtn) sendBtn.disabled = false;
+            
+            queryInput.value = "";
+            pinnedContexts = [];
+            renderPinnedContexts();
+            
+            await loadSession(currentSessionId);
+            
+            setTimeout(() => {
+                const bubbles = document.querySelectorAll('.msg-bubble');
+                if (bubbles.length > 0) {
+                    const lastBubbleId = bubbles[bubbles.length - 1].id;
+                    const materialsContainer = document.getElementById(`materials-container-${lastBubbleId}`);
+                    if (materialsContainer) {
+                        materialsContainer.style.display = 'block';
+                        switchMaterialTab(lastBubbleId, 'concept');
+                    }
+                }
+            }, 500);
+        }
+    } catch (err) {
+        console.error(err);
+        btn.innerText = originalText;
+        btn.style.pointerEvents = "auto";
+        queryInput.disabled = false;
+        if (sendBtn) sendBtn.disabled = false;
+    }
+};
+
+function appendSystemMessage(text) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'msg-wrapper msg-ai fade-in';
+    wrapper.innerHTML = `
+        <div class="msg-name">System</div>
+        <div class="msg-bubble" style="background: rgba(248, 113, 113, 0.1); border-color: #f87171; color: #f87171;">
+            ${text}
+        </div>
+    `;
+    const messagesDiv = document.getElementById("messages");
+    messagesDiv.appendChild(wrapper);
+    messagesDiv.scrollTo({ top: messagesDiv.scrollHeight, behavior: 'smooth' });
+}
+
+window.renderSavedConceptChecks = function(widgets, container) {
+    container.innerHTML = '';
+    widgets.forEach((w, idx) => {
+        appendSavedConceptCheck(w, container, idx + 1);
+    });
+};
+
+window.appendSavedConceptCheck = function(widget, container, setNumber = null) {
+    const setNum = setNumber || (container.querySelectorAll('.widget-set').length + 1);
+    const div = document.createElement('div');
+    div.className = 'widget-set';
+    div.innerHTML = `<div class="widget-set-title">Concept Check ${setNum}</div><div id="cc-set-${widget.id}"></div>`;
+    container.appendChild(div);
+    
+    // Determine state
+    const isReviewMode = widget.state && widget.state.completed;
+    const userAnswers = isReviewMode ? widget.state.userAnswers : [];
+    
+    renderConceptCheck(widget.data, document.getElementById(`cc-set-${widget.id}`), 0, widget.id, userAnswers, isReviewMode, widget.text || "");
+    
+    const bubbleId = container.id.replace('concept-container-', '');
+    updateWidgetCountBtn(bubbleId);
+};
+
+window.renderConceptCheck = function(questions, container, currentIndex = 0, widgetId = null, userAnswers = [], isReviewMode = false, originalText = "") {
+    if (currentIndex >= questions.length) {
+        let retakeBtnHtml = isReviewMode ? 
+            `<button class="flashcard-subtle-btn" style="margin-top:15px; width: 100%; justify-content:center;" onclick="renderConceptCheck(JSON.parse(this.dataset.q), document.getElementById('${container.id}'), 0, ${widgetId}, [], false, '${originalText.replace(/'/g, "\\'")}')" data-q='${JSON.stringify(questions).replace(/'/g, "\\'")}'>
+                <i class="ri-refresh-line"></i> Retake
+            </button>` : '';
+
+        container.innerHTML = `
+            <div class="quiz-container">
+                <div class="quiz-completed" style="text-align: center; padding: 20px;">
+                    <i class="ri-check-double-line" style="font-size: 2.5rem; color: #4ade80;"></i>
+                    <p style="margin-top: 10px; font-weight: 500;">Evaluation Complete!</p>
+                    <p style="font-size: 0.9rem; margin-top: 10px; color: var(--text-muted);">Please check the chat for Intellectra's tailored explanation.</p>
+                    ${retakeBtnHtml}
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    const q = questions[currentIndex];
+    
+    // Ensure userAnswers array is initialized for current index
+    if (userAnswers.length <= currentIndex) {
+        userAnswers.push("");
+    }
+
+    let inputHtml = '';
+    if (isReviewMode) {
+        inputHtml = `
+            <div style="background: var(--bg-color); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); color: var(--text-muted); font-size: 0.9rem;">
+                <strong>Your Answer:</strong><br>
+                ${userAnswers[currentIndex] || "<em>No answer provided</em>"}
+            </div>
+        `;
+    } else {
+        inputHtml = `
+            <textarea class="concept-textarea" id="cc-input-${container.id}" placeholder="Type your explanation here..." oninput="updateConceptAnswer('${container.id}', ${currentIndex}, this.value)">${userAnswers[currentIndex]}</textarea>
+        `;
+    }
+
+    let navControls = '';
+    if (currentIndex > 0) {
+        navControls += `<button onclick="changeConceptQuestion('${container.id}', -1)"><i class="ri-arrow-left-s-line"></i> Prev</button>`;
+    } else {
+        navControls += `<button disabled style="opacity:0.5"><i class="ri-arrow-left-s-line"></i> Prev</button>`;
+    }
+    
+    navControls += `<div style="flex:1"></div>`;
+    
+    if (currentIndex < questions.length - 1) {
+        navControls += `<button onclick="changeConceptQuestion('${container.id}', 1)">Next <i class="ri-arrow-right-s-line"></i></button>`;
+    } else {
+        if (isReviewMode) {
+             navControls += `<button onclick="changeConceptQuestion('${container.id}', 1)">Finish <i class="ri-check-line"></i></button>`;
+        } else {
+             navControls += `<button onclick="submitConceptCheck('${container.id}')" class="submit-btn">Submit Answers <i class="ri-send-plane-fill"></i></button>`;
+        }
+    }
+
+    container.innerHTML = `
+        <div class="quiz-container">
+            <div class="quiz-indicator">${isReviewMode ? 'Reviewing ' : ''}Diagnostic ${currentIndex + 1} of ${questions.length}</div>
+            <div class="quiz-question">${q.question}</div>
+            <div style="margin-bottom: 15px;">
+                ${inputHtml}
+            </div>
+            <div class="quiz-controls" style="display: flex;">
+                ${navControls}
+            </div>
+        </div>
+    `;
+    
+    container.dataset.currentIndex = currentIndex;
+    container.dataset.questions = JSON.stringify(questions);
+    container.dataset.widgetId = widgetId;
+    container.dataset.userAnswers = JSON.stringify(userAnswers);
+    container.dataset.isReviewMode = isReviewMode;
+    container.dataset.originalText = encodeURIComponent(originalText);
+};
+
+window.updateConceptAnswer = function(containerId, index, value) {
+    const container = document.getElementById(containerId);
+    let userAnswers = JSON.parse(container.dataset.userAnswers || "[]");
+    userAnswers[index] = value;
+    container.dataset.userAnswers = JSON.stringify(userAnswers);
+};
+
+window.changeConceptQuestion = function(containerId, direction) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    
+    let currentIndex = parseInt(container.dataset.currentIndex);
+    const questions = JSON.parse(container.dataset.questions);
+    const widgetId = container.dataset.widgetId !== "null" ? parseInt(container.dataset.widgetId) : null;
+    const userAnswers = JSON.parse(container.dataset.userAnswers || "[]");
+    const isReviewMode = container.dataset.isReviewMode === 'true';
+    const originalText = decodeURIComponent(container.dataset.originalText || "");
+    
+    currentIndex += direction;
+    renderConceptCheck(questions, container, currentIndex, widgetId, userAnswers, isReviewMode, originalText);
+};
+
+window.submitConceptCheck = async function(containerId) {
+    const container = document.getElementById(containerId);
+    const btn = container.querySelector('.submit-btn');
+    const queryInput = document.getElementById('query');
+    const sendBtn = document.getElementById('sendBtn');
+    
+    if (btn) {
+        btn.innerHTML = `<i class="ri-loader-4-line ri-spin"></i> Evaluating...`;
+        btn.disabled = true;
+    }
+    
+    // Disable main chat input during evaluation
+    if (queryInput) queryInput.disabled = true;
+    if (sendBtn) sendBtn.disabled = true;
+
+    const questions = JSON.parse(container.dataset.questions).map(q => q.question);
+    const userAnswers = JSON.parse(container.dataset.userAnswers || "[]");
+    const widgetId = container.dataset.widgetId !== "null" ? parseInt(container.dataset.widgetId) : null;
+    const originalText = decodeURIComponent(container.dataset.originalText || "");
+
+    try {
+        const res = await fetch("http://127.0.0.1:5000/api/concept_check/evaluate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ 
+                session_id: currentSessionId, 
+                questions: questions,
+                answers: userAnswers,
+                original_text: originalText
+            })
+        });
+        
+        const data = await res.json();
+        
+        if (data.evaluation) {
+            if (widgetId) {
+                const state = { completed: true, userAnswers: userAnswers };
+                await fetch(`http://127.0.0.1:5000/api/widgets/${widgetId}/state`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(state)
+                });
+            }
+            
+            // Re-render to show completion
+            const qs = JSON.parse(container.dataset.questions);
+            renderConceptCheck(qs, container, qs.length, widgetId, userAnswers, true, originalText);
+            
+            // Inject new messages manually so we don't reset the open UI widgets
+            // appendMessage signature: (text, sender, sources = [], messageId = null, widgets = [])
+            appendMessage("I have submitted my answers to the concept check.", "user", [], null, []);
+            appendMessage(data.evaluation, "ai", [], data.message_id, []);
+            
+            // Re-enable chat input
+            if (queryInput) queryInput.disabled = false;
+            if (sendBtn) sendBtn.disabled = false;
+        } else {
+            alert("Error evaluating answers.");
+            if (btn) { btn.innerHTML = `Submit Answers <i class="ri-send-plane-fill"></i>`; btn.disabled = false; }
+            if (queryInput) queryInput.disabled = false;
+            if (sendBtn) sendBtn.disabled = false;
+        }
+    } catch (err) {
+        console.error(err);
+        alert("Error submitting concept check.");
+        if (btn) { btn.innerHTML = `Submit Answers <i class="ri-send-plane-fill"></i>`; btn.disabled = false; }
+        if (queryInput) queryInput.disabled = false;
+        if (sendBtn) sendBtn.disabled = false;
+    }
 };
 
 // Fetch session history list
@@ -1031,8 +1393,8 @@ function updateStreamContent(bubbleId, text, sources = []) {
     const contentDiv = bubble.querySelector(".stream-content");
     const sourcesDiv = bubble.querySelector(".sources-placeholder");
     
-    // During streaming, we just show plain text with preserved line breaks
-    contentDiv.innerText = text;
+    // During streaming, dynamically render Markdown so formatting is live
+    contentDiv.innerHTML = renderMarkdownWithMath(text);
     
     if (sources && sources.length > 0 && sourcesDiv.innerHTML === "") {
         sourcesDiv.innerHTML = `<div class="sources-container">
@@ -1065,13 +1427,25 @@ function finalizeStreamContent(bubbleId, text, sources, messageId) {
         actionsHtml = `
             <div class="msg-actions">
                 <button class="flashcard-subtle-btn" data-text="${encodedText}" onclick="generateFlashcards('${bubbleId}', this.dataset.text, ${messageId})" id="btn-flashcard-${bubbleId}" title="Generate Flashcards">
-                    <i class="ri-stack-line"></i> Generate Flashcards
+                    <i class="ri-stack-line"></i> Flashcards
                 </button>
                 <button class="flashcard-subtle-btn" data-text="${encodedText}" onclick="generateQuiz('${bubbleId}', this.dataset.text, ${messageId})" id="btn-quiz-${bubbleId}" title="Generate Quiz">
-                    <i class="ri-questionnaire-line"></i> Generate Quiz
+                    <i class="ri-questionnaire-line"></i> Quiz
                 </button>
-                <div id="flashcards-container-${bubbleId}" class="widget-display-container" style="display: none;"></div>
-                <div id="quiz-container-${bubbleId}" class="widget-display-container" style="display: none;"></div>
+                <button class="flashcard-subtle-btn" data-text="${encodedText}" onclick="pinContext('${bubbleId}', this.dataset.text, ${messageId})" id="btn-pin-${bubbleId}" title="Pin Context">
+                    <i class="ri-pushpin-line"></i> Pin Context
+                </button>
+            </div>
+            
+            <div id="materials-container-${bubbleId}" class="materials-container widget-display-container" style="display: none;">
+                <div class="materials-tabs">
+                    <button class="material-tab active" onclick="switchMaterialTab('${bubbleId}', 'flashcards')" id="tab-flashcards-${bubbleId}">Flashcards</button>
+                    <button class="material-tab" onclick="switchMaterialTab('${bubbleId}', 'quiz')" id="tab-quiz-${bubbleId}">Quizzes</button>
+                    <button class="material-tab" onclick="switchMaterialTab('${bubbleId}', 'concept')" id="tab-concept-${bubbleId}">Concept Checks</button>
+                </div>
+                <div id="flashcards-container-${bubbleId}" class="material-content" style="display: block;"></div>
+                <div id="quiz-container-${bubbleId}" class="material-content" style="display: none;"></div>
+                <div id="concept-container-${bubbleId}" class="material-content" style="display: none;"></div>
             </div>
         `;
     }
@@ -1090,8 +1464,8 @@ async function sendMessage(retryText = null) {
     
     queryInput.value = "";
     queryInput.style.height = 'auto';
-    queryInput.disabled = true;
-    queryInput.placeholder = "Intellectra is thinking...";
+    // Remove queryInput.disabled so user can draft next message
+    // queryInput.placeholder = "Message Intellectra...";
     
     isGenerating = true;
     sendBtn.innerHTML = '<i class="ri-stop-mini-fill"></i>';
@@ -1198,8 +1572,8 @@ async function sendMessage(retryText = null) {
         }
     } finally {
         isGenerating = false;
+        // Ensure input is enabled just in case
         queryInput.disabled = false;
-        queryInput.placeholder = "Message Intellectra...";
         sendBtn.innerHTML = '<i class="ri-send-plane-fill"></i>';
         sendBtn.classList.remove("stop-btn");
         setTimeout(() => queryInput.focus(), 10);
@@ -1210,7 +1584,8 @@ queryInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         if (isGenerating) {
-            stopGeneration();
+            // Do not send or stop if they press enter while drafting a message
+            return;
         } else {
             sendMessage();
         }
@@ -1235,28 +1610,136 @@ attachBtn.addEventListener("click", () => {
     fileInput.click();
 });
 
+let currentUploadXHR = null;
+
 fileInput.addEventListener("change", async () => {
     const file = fileInput.files[0];
     if (!file) return;
 
-    appendMessage(`Uploading file: ${file.name}...`, "user");
+    // Reset upload input so same file can be selected again
+    fileInput.value = "";
+
+    const uploadContainer = document.getElementById("upload-container");
+    const uploadFilename = document.getElementById("upload-filename");
+    const uploadRing = document.getElementById("upload-ring");
+    const uploadPercentage = document.getElementById("upload-percentage");
+    const cancelUploadBtn = document.getElementById("cancel-upload-btn");
+
+    uploadFilename.textContent = file.name;
+    uploadRing.style.strokeDasharray = "0, 100";
+    uploadPercentage.textContent = "0%";
+    uploadContainer.style.display = "flex";
+
+    // Disable sending messages during upload
+    queryInput.disabled = true;
+    sendBtn.disabled = true;
 
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("session_id", currentSessionId || "null");
 
-    try {
-        const res = await fetch("http://127.0.0.1:5000/api/upload", {
-            method: "POST",
-            body: formData
-        });
+    currentUploadXHR = new XMLHttpRequest();
+    let aiProcessingInterval = null;
 
-        const data = await res.json();
-        appendMessage(data.message || "⚠️ " + data.error, "ai");
-    } catch (err) {
+    cancelUploadBtn.onclick = () => {
+        if (currentUploadXHR) {
+            currentUploadXHR.abort();
+            currentUploadXHR = null;
+        }
+        if (aiProcessingInterval) {
+            clearInterval(aiProcessingInterval);
+            aiProcessingInterval = null;
+        }
+        uploadContainer.style.display = "none";
+        queryInput.disabled = false;
+        sendBtn.disabled = false;
+        appendMessage("⚠️ File upload cancelled.", "ai");
+    };
+
+    currentUploadXHR.upload.addEventListener("progress", (e) => {
+        if (e.lengthComputable) {
+            const percentComplete = Math.round((e.loaded / e.total) * 100);
+            
+            if (percentComplete < 100) {
+                uploadRing.style.strokeDasharray = `${percentComplete}, 100`;
+                uploadPercentage.textContent = `${percentComplete}%`;
+                uploadFilename.innerHTML = `${file.name} <span style="color: var(--text-muted); font-size: 0.8rem; margin-left: 8px;">(Uploading to Server)</span>`;
+            } else {
+                if (!aiProcessingInterval) {
+                    let aiProgress = 0;
+                    uploadFilename.innerHTML = `${file.name} <span style="color: var(--primary-accent); font-size: 0.8rem; margin-left: 8px;">(AI Reading Document...)</span>`;
+                    uploadPercentage.textContent = "0%";
+                    uploadRing.style.strokeDasharray = "0, 100";
+                    
+                    aiProcessingInterval = setInterval(() => {
+                        if (aiProgress < 95) {
+                            const increment = Math.max(1, Math.round((95 - aiProgress) * 0.1));
+                            aiProgress += increment;
+                            uploadPercentage.textContent = `${aiProgress}%`;
+                            uploadRing.style.strokeDasharray = `${aiProgress}, 100`;
+                        }
+                    }, 500);
+                }
+            }
+        }
+    });
+
+    currentUploadXHR.addEventListener("load", () => {
+        if (aiProcessingInterval) {
+            clearInterval(aiProcessingInterval);
+            aiProcessingInterval = null;
+        }
+        uploadPercentage.textContent = "100%";
+        uploadRing.style.strokeDasharray = "100, 100";
+        
+        setTimeout(() => {
+            uploadContainer.style.display = "none";
+            queryInput.disabled = false;
+            sendBtn.disabled = false;
+            
+            const responseStatus = currentUploadXHR.status;
+            const responseText = currentUploadXHR.responseText;
+            currentUploadXHR = null;
+
+            if (responseStatus >= 200 && responseStatus < 300) {
+                try {
+                    const data = JSON.parse(responseText);
+                    
+                    if (data.session_id && currentSessionId !== data.session_id) {
+                        currentSessionId = data.session_id;
+                        saveCurrentSession();
+                        sessionTitle.textContent = "Current Session";
+                        fetchSessions();
+                    }
+                    
+                    appendMessage(data.message || "File uploaded and processed successfully.", "ai");
+                } catch (err) {
+                    appendMessage("File uploaded successfully.", "ai");
+                }
+            } else {
+                let data = {};
+                try {
+                    data = JSON.parse(responseText);
+                } catch (e) {}
+                appendMessage("⚠️ " + (data.error || "Upload failed."), "ai");
+            }
+        }, 300);
+    });
+
+    currentUploadXHR.addEventListener("error", () => {
+        if (aiProcessingInterval) {
+            clearInterval(aiProcessingInterval);
+            aiProcessingInterval = null;
+        }
+        uploadContainer.style.display = "none";
+        queryInput.disabled = false;
+        sendBtn.disabled = false;
+        currentUploadXHR = null;
         appendMessage("⚠️ Upload failed. Server not responding.", "ai");
-    }
-    
-    fileInput.value = '';
+    });
+
+    currentUploadXHR.open("POST", "http://127.0.0.1:5000/api/upload", true);
+    currentUploadXHR.send(formData);
 });
 
 // Start app
