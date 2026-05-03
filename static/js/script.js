@@ -11,7 +11,12 @@ const chatTimeline = document.getElementById("chat-timeline");
 const historySearch = document.getElementById("historySearch");
 const studyLevelBtn = document.getElementById("studyLevelBtn");
 const studyLevelMenu = document.getElementById("studyLevelMenu");
-const dropdownItems = document.querySelectorAll(".dropdown-item");
+const studyLevelItems = document.querySelectorAll("#studyLevelMenu .dropdown-item");
+const plusBtn = document.getElementById("plusBtn");
+const hiddenTools = document.getElementById("hiddenTools");
+const modeSelectBtn = document.getElementById("modeSelectBtn");
+const modeTextWrapper = document.getElementById("modeTextWrapper");
+let isThinkingMode = false;
 
 // Mobile Sidebar Elements
 const menuBtn = document.getElementById("menuBtn");
@@ -54,6 +59,7 @@ let currentAbortController = null;
 
 // Dropdown Logic
 studyLevelBtn.addEventListener("click", (e) => {
+    console.log("Study Mode button clicked!");
     e.stopPropagation();
     studyLevelMenu.classList.toggle("show");
 });
@@ -64,10 +70,10 @@ document.addEventListener("click", (e) => {
     }
 });
 
-dropdownItems.forEach(item => {
+studyLevelItems.forEach(item => {
     item.addEventListener("click", () => {
         currentStudyLevel = item.dataset.value;
-        dropdownItems.forEach(i => i.classList.remove("active"));
+        studyLevelItems.forEach(i => i.classList.remove("active"));
         item.classList.add("active");
         studyLevelMenu.classList.remove("show");
         
@@ -82,6 +88,34 @@ dropdownItems.forEach(item => {
             studyLevelBtn.title = "Study Mode: Standard";
         }
     });
+});
+
+plusBtn.addEventListener("click", () => {
+    plusBtn.classList.toggle("active");
+    hiddenTools.classList.toggle("show");
+});
+
+modeSelectBtn.addEventListener("click", () => {
+    if (isGenerating) return; // Prevent switching while generating
+    
+    const oldItem = modeTextWrapper.querySelector(".mode-text-item");
+    const nextMode = isThinkingMode ? "Standard" : "Thinking";
+    
+    // Animate out
+    oldItem.classList.add("slide-out");
+    
+    // Create and animate in
+    const newItem = document.createElement("span");
+    newItem.className = "mode-text-item slide-in";
+    newItem.innerText = nextMode;
+    modeTextWrapper.appendChild(newItem);
+    
+    isThinkingMode = !isThinkingMode;
+    
+    setTimeout(() => {
+        oldItem.remove();
+        newItem.classList.remove("slide-in");
+    }, 400);
 });
 
 // Session persistence via localStorage
@@ -823,13 +857,20 @@ async function fetchSessions() {
                     
                     div.innerHTML = `
                         <div class="history-item-title">${session.title}</div>
-                        <div class="delete-chat-btn" onclick="deleteSession(event, ${session.id})">
-                            <i class="ri-delete-bin-line"></i>
+                        <div class="chat-menu-container">
+                            <div class="chat-options-btn" onclick="toggleChatMenu(event, ${session.id})">
+                                <i class="ri-more-2-fill"></i>
+                            </div>
+                            <div class="chat-menu" id="chat-menu-${session.id}">
+                                <div class="chat-menu-item" onclick="deleteSession(event, ${session.id})">
+                                    <i class="ri-delete-bin-line"></i> Delete
+                                </div>
+                            </div>
                         </div>
                     `;
                     
                     div.onclick = (e) => {
-                        if (e.target.closest('.delete-chat-btn')) return;
+                        if (e.target.closest('.chat-menu-container')) return;
                         loadSession(session.id, session.title);
                         if(window.innerWidth <= 768) closeSidebar();
                     };
@@ -843,6 +884,29 @@ async function fetchSessions() {
         console.error("Error fetching sessions:", err);
     }
 }
+
+window.toggleChatMenu = function(event, sessionId) {
+    event.stopPropagation();
+    const allMenus = document.querySelectorAll('.chat-menu');
+    const targetMenu = document.getElementById(`chat-menu-${sessionId}`);
+    
+    // Close others
+    allMenus.forEach(menu => {
+        if (menu !== targetMenu) menu.classList.remove('show');
+    });
+    
+    // Toggle target
+    targetMenu.classList.toggle('show');
+    event.currentTarget.classList.toggle('active', targetMenu.classList.contains('show'));
+};
+
+// Close chat menus on outside click
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.chat-menu-container')) {
+        document.querySelectorAll('.chat-menu').forEach(m => m.classList.remove('show'));
+        document.querySelectorAll('.chat-options-btn').forEach(b => b.classList.remove('active'));
+    }
+});
 
 // Search filtering logic
 historySearch.addEventListener('input', (e) => {
@@ -945,7 +1009,77 @@ function stopGeneration() {
     }
 }
 
-// Send Message
+// Create an empty AI message container for streaming
+function createAiStreamContainer() {
+    const wrapper = document.createElement("div");
+    wrapper.className = "msg-wrapper ai";
+    const bubbleId = `bubble-${Math.random().toString(36).substring(2, 9)}`;
+    wrapper.innerHTML = `
+        <div class="sender-name"><i class="ri-flashlight-fill"></i> Intellectra</div>
+        <div class="msg-bubble" id="${bubbleId}">
+            <div class="stream-content"></div>
+            <div class="sources-placeholder"></div>
+        </div>
+    `;
+    return { wrapper, bubbleId };
+}
+
+// Update the streaming content
+function updateStreamContent(bubbleId, text, sources = []) {
+    const bubble = document.getElementById(bubbleId);
+    if (!bubble) return;
+    const contentDiv = bubble.querySelector(".stream-content");
+    const sourcesDiv = bubble.querySelector(".sources-placeholder");
+    
+    // During streaming, we just show plain text with preserved line breaks
+    contentDiv.innerText = text;
+    
+    if (sources && sources.length > 0 && sourcesDiv.innerHTML === "") {
+        sourcesDiv.innerHTML = `<div class="sources-container">
+            <div class="sources-title">Sources:</div>
+            ${sources.map(s => `<span class="source-chip"><i class="ri-file-list-2-line"></i> ${s}</span>`).join('')}
+        </div>`;
+    }
+}
+
+// Finalize the AI message (apply Markdown, KaTeX, and add action buttons)
+function finalizeStreamContent(bubbleId, text, sources, messageId) {
+    const bubble = document.getElementById(bubbleId);
+    if (!bubble) return;
+    
+    // Apply full formatting
+    const formattedHtml = renderMarkdownWithMath(text);
+    
+    let sourcesHtml = "";
+    if (sources && sources.length > 0) {
+        sourcesHtml = `<div class="sources-container">
+            <div class="sources-title">Sources:</div>
+            ${sources.map(s => `<span class="source-chip"><i class="ri-file-list-2-line"></i> ${s}</span>`).join('')}
+        </div>`;
+    }
+
+    // Add action buttons (flashcards, quiz)
+    let actionsHtml = "";
+    if (text.length > 50 && !text.startsWith("⚠️") && !text.startsWith("Assalamu alaikum")) {
+        const encodedText = text.replace(/"/g, '&quot;');
+        actionsHtml = `
+            <div class="msg-actions">
+                <button class="flashcard-subtle-btn" data-text="${encodedText}" onclick="generateFlashcards('${bubbleId}', this.dataset.text, ${messageId})" id="btn-flashcard-${bubbleId}" title="Generate Flashcards">
+                    <i class="ri-stack-line"></i> Generate Flashcards
+                </button>
+                <button class="flashcard-subtle-btn" data-text="${encodedText}" onclick="generateQuiz('${bubbleId}', this.dataset.text, ${messageId})" id="btn-quiz-${bubbleId}" title="Generate Quiz">
+                    <i class="ri-questionnaire-line"></i> Generate Quiz
+                </button>
+                <div id="flashcards-container-${bubbleId}" class="widget-display-container" style="display: none;"></div>
+                <div id="quiz-container-${bubbleId}" class="widget-display-container" style="display: none;"></div>
+            </div>
+        `;
+    }
+
+    bubble.innerHTML = `${formattedHtml}${sourcesHtml}${actionsHtml}`;
+}
+
+// Send Message (Streaming Version)
 async function sendMessage(retryText = null) {
     if (isGenerating) return;
 
@@ -955,7 +1089,7 @@ async function sendMessage(retryText = null) {
     if (!retryText) appendMessage(query, "user");
     
     queryInput.value = "";
-    queryInput.style.height = 'auto'; // Reset auto-resize
+    queryInput.style.height = 'auto';
     queryInput.disabled = true;
     queryInput.placeholder = "Intellectra is thinking...";
     
@@ -967,7 +1101,6 @@ async function sendMessage(retryText = null) {
     messagesDiv.appendChild(typingIndicator);
     messagesDiv.scrollTo({ top: messagesDiv.scrollHeight, behavior: 'smooth' });
 
-    // Remember which session this request belongs to
     const requestSessionId = currentSessionId;
     pendingSessions.add(requestSessionId);
     
@@ -981,48 +1114,87 @@ async function sendMessage(retryText = null) {
             body: JSON.stringify({ 
                 query: query, 
                 session_id: currentSessionId,
-                level: currentStudyLevel 
+                level: currentStudyLevel,
+                mode: isThinkingMode ? "thinking" : "standard",
+                stream: true 
             })
         });
 
-        const data = await res.json();
-        const responseSessionId = data.session_id || requestSessionId;
+        if (!res.ok) {
+            const errorData = await res.json();
+            throw new Error(errorData.error || "Server error");
+        }
 
-        // Clear pending state
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let fullResponse = "";
+        let sources = [];
+        let aiMsgId = null;
+        let streamInfo = null;
+        let responseSessionId = requestSessionId;
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split("\n");
+
+            for (const line of lines) {
+                if (line.startsWith("data: ")) {
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        
+                        if (data.session_id) {
+                            responseSessionId = data.session_id;
+                            if (currentSessionId !== responseSessionId) {
+                                currentSessionId = responseSessionId;
+                                saveCurrentSession();
+                                sessionTitle.textContent = "Current Session";
+                            }
+                        }
+                        if (data.sources) sources = data.sources;
+                        
+                        if (data.token) {
+                            if (!streamInfo) {
+                                typingIndicator.remove();
+                                streamInfo = createAiStreamContainer();
+                                messagesDiv.appendChild(streamInfo.wrapper);
+                            }
+                            fullResponse += data.token;
+                            updateStreamContent(streamInfo.bubbleId, fullResponse, sources);
+                            
+                            // Auto-scroll if not manually scrolled up
+                            if (!isScrolledUp) {
+                                messagesDiv.scrollTo({ top: messagesDiv.scrollHeight });
+                            }
+                        }
+
+                        if (data.done) {
+                            aiMsgId = data.message_id;
+                            if (streamInfo) {
+                                finalizeStreamContent(streamInfo.bubbleId, fullResponse, sources, aiMsgId);
+                            }
+                            fetchSessions();
+                        }
+                    } catch (e) {
+                        console.error("Error parsing stream chunk:", e);
+                    }
+                }
+            }
+        }
+        
         pendingSessions.delete(requestSessionId);
         pendingSessions.delete(responseSessionId);
 
-        // Check if user is still on the same session
-        if (currentSessionId === requestSessionId || currentSessionId === responseSessionId) {
-            // Still on the same chat — update UI directly
-            typingIndicator.remove();
-            if (data.response) {
-                appendMessage(data.response, "ai", data.sources || [], data.message_id, []);
-            }
-            if (data.session_id && currentSessionId !== data.session_id) {
-                currentSessionId = data.session_id;
-                saveCurrentSession();
-                sessionTitle.textContent = "Current Session";
-            }
-            fetchSessions();
-        } else {
-            // User switched to a different chat while AI was thinking.
-            // The backend already saved the response to the DB.
-            // Just remove any lingering indicator and refresh the sidebar.
-            typingIndicator.remove();
-            fetchSessions();
-        }
     } catch (err) {
         pendingSessions.delete(requestSessionId);
-        if (currentSessionId === requestSessionId) {
-            typingIndicator.remove();
-            if (err.name === 'AbortError') {
-                appendMessage("⚠️ Generation stopped by user.", "ai");
-            } else {
-                // Add a retry button
-                const encodedQuery = query.replace(/"/g, '&quot;');
-                appendMessage(`⚠️ Server not responding. <button class="action-btn" style="display:inline; padding: 2px 8px; font-size: 0.8rem; border: 1px solid var(--border-color); margin-left: 8px;" onclick="sendMessage('${encodedQuery}')">Retry</button>`, "ai");
-            }
+        typingIndicator.remove();
+        if (err.name === 'AbortError') {
+            appendMessage("⚠️ Generation stopped by user.", "ai");
+        } else {
+            const encodedQuery = query.replace(/"/g, '&quot;');
+            appendMessage(`⚠️ Error: ${err.message}. <button class="action-btn" style="display:inline; padding: 2px 8px; font-size: 0.8rem; border: 1px solid var(--border-color); margin-left: 8px;" onclick="sendMessage('${encodedQuery}')">Retry</button>`, "ai");
         }
     } finally {
         isGenerating = false;

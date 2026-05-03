@@ -64,24 +64,39 @@
 
         <div id="input-wrapper">
             <div class="input-box">
-                <button class="action-btn" id="attachBtn" title="Upload Document">
-                    <i class="ri-attachment-2"></i>
-                </button>
-                <input type="file" id="fileInput" accept=".pdf,.docx,.ppt,.pptx" />
-                <div class="custom-dropdown">
-                    <button class="action-btn" id="studyLevelBtn" title="Study Mode">
-                        <i class="ri-graduation-cap-line"></i>
+                <div class="input-main-row">
+                    <button class="action-btn" id="plusBtn" title="More Tools">
+                        <i class="ri-add-line"></i>
                     </button>
-                    <div class="dropdown-menu" id="studyLevelMenu">
-                        <div class="dropdown-item active" data-value="standard">Standard</div>
-                        <div class="dropdown-item" data-value="eli5">ELI5 (Simple)</div>
-                        <div class="dropdown-item" data-value="advanced">Advanced</div>
+                    <div class="hidden-tools" id="hiddenTools">
+                        <button class="action-btn" id="attachBtn" title="Upload Document">
+                            <i class="ri-attachment-2"></i>
+                        </button>
+                        <input type="file" id="fileInput" accept=".pdf,.docx,.ppt,.pptx" />
+                        <div class="custom-dropdown">
+                            <button class="action-btn" id="studyLevelBtn" title="Study Mode">
+                                <i class="ri-graduation-cap-line"></i>
+                            </button>
+                            <div class="dropdown-menu" id="studyLevelMenu">
+                                <div class="dropdown-item active" data-value="standard">Standard</div>
+                                <div class="dropdown-item" data-value="eli5">ELI5 (Simple)</div>
+                                <div class="dropdown-item" data-value="advanced">Advanced</div>
+                            </div>
+                        </div>
                     </div>
+                    <textarea id="query" placeholder="Message Intellectra..." rows="1"></textarea>
+                    <button class="action-btn send-btn" id="sendBtn">
+                        <i class="ri-send-plane-fill"></i>
+                    </button>
                 </div>
-                <textarea id="query" placeholder="Message Intellectra..." rows="1"></textarea>
-                <button class="action-btn send-btn" id="sendBtn">
-                    <i class="ri-send-plane-fill"></i>
-                </button>
+                <div class="input-footer-row">
+                    <button class="mode-toggle-btn" id="modeSelectBtn">
+                        <div class="mode-text-wrapper" id="modeTextWrapper">
+                            <span class="mode-text-item active" id="currentModeText">Standard</span>
+                        </div>
+                        <i class="ri-arrow-right-s-line"></i>
+                    </button>
+                </div>
             </div>
         </div>
     </div>

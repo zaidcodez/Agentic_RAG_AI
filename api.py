@@ -40,13 +40,13 @@ collection = chroma_client.get_or_create_collection(name="chroma")
 # Embedding model
 embedder = SentenceTransformer("all-MiniLM-L6-v2")
 
-# NVIDIA LLM client
+# NVIDIA LLM client (Default fast model)
 llm = ChatNVIDIA(
-    model="nvidia/nemotron-3-super-120b-a12b",
+    model="meta/llama-3.1-8b-instruct",
     api_key=API_KEY,
     temperature=1,
-    top_p=0.95,
-    max_tokens=16384,
+    top_p=0.9,
+    max_tokens=4096,
 )
 
 # Text splitter for chunking
@@ -95,7 +95,7 @@ def has_uploaded_docs():
 # ----------------------------
 # Helper: Answer query
 # ----------------------------
-def answer_query(query, chat_history=None, level="standard"):
+def answer_query(query, chat_history=None, level="standard", mode="standard", stream=False):
     query_lower = query.strip().lower()
 
     # Step 0: Study Level Instructions
@@ -107,23 +107,41 @@ def answer_query(query, chat_history=None, level="standard"):
     else:
         level_instruction = "IMPORTANT: Provide a clear, balanced, and helpful explanation suitable for a standard student level."
 
-    # Step 0.1: Casual greetings
-    if query_lower in ["hi", "hello", "hey", "what’s up", "yo", "good morning", "good evening"]:
+    # Step 0.1: Thinking Mode Instruction
+    if mode == "thinking":
+        level_instruction += "\nTHINKING MODE ACTIVE: Before providing your final answer, think step-by-step. Analyze the question, consider different perspectives, and show your internal reasoning process. Be extremely thorough and analytical."
+
+    # Step 0.2: Casual greetings
+    if query_lower in ["hi", "hello", "hey", "what’s up", "yo", "good morning", "good evening"] and not stream:
         return {
             "response": "Hey there! 😊 How can I help you today?",
             "sources": []
         }
 
-    print(f"\n🚀 Thinking (Level: {level})...\n")
+    # Step 0.3: Model Selection
+    # Thinking mode uses a heavy-duty model, Standard uses a lightning-fast one.
+    model_name = "nvidia/nemotron-4-340b-instruct" if mode == "thinking" else "meta/llama-3.1-8b-instruct"
+    
+    current_llm = ChatNVIDIA(
+        model=model_name,
+        api_key=API_KEY,
+        temperature=0.7 if mode == "thinking" else 1.0, # Lower temperature for thinking
+        top_p=0.9,
+        max_tokens=4096,
+    )
+
+    print(f"\n🚀 Thinking (Level: {level}, Mode: {mode}, Model: {model_name})...\n")
     # Step 1: Check if any documents exist at all
     docs_exist = has_uploaded_docs()
 
     # Step 2: If docs exist, try local search
     retrieved_docs = []
     if docs_exist:
+        # Retrieve more context in thinking mode
+        n_results = 10 if mode == "thinking" else 4
         results = collection.query(
             query_texts=[query],
-            n_results=4
+            n_results=n_results
         )
         retrieved_docs = results.get("documents", [])
 
@@ -190,23 +208,25 @@ def answer_query(query, chat_history=None, level="standard"):
                 messages_to_send.append(AIMessage(content=msg["text"]))
     
     messages_to_send.append(HumanMessage(content=query))
-    response = llm.invoke(messages_to_send)
-
-    # Extract sources if they exist
+    
+    # Extract sources if they exist (need them for both stream and non-stream)
     sources = []
     if has_local_data:
         try:
-            # results is from the earlier collection.query call
             metas = results.get("metadatas", [])
             if metas:
                 sources = list(set([m["source"] for m in metas[0] if "source" in m]))
         except Exception:
             sources = []
 
-    return {
-        "response": response.content,
-        "sources": sources
-    }
+    if stream:
+        return current_llm.stream(messages_to_send), sources
+    else:
+        response = current_llm.invoke(messages_to_send)
+        return {
+            "response": response.content,
+            "sources": sources
+        }
 
 # ----------------------------
 # Helper: Generate Flashcards
