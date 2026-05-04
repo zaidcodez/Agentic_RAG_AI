@@ -106,7 +106,7 @@ def has_uploaded_docs(session_id=None):
 # ----------------------------
 # Helper: Answer query
 # ----------------------------
-def answer_query(query, chat_history=None, level="standard", mode="standard", stream=False, session_id=None):
+def answer_query(query, chat_history=None, level="standard", mode="standard", stream=False, session_id=None, pinned_contexts=None):
     query_lower = query.strip().lower()
 
     # Step 0: Study Level Instructions
@@ -161,6 +161,14 @@ def answer_query(query, chat_history=None, level="standard", mode="standard", st
 
     has_local_data = retrieved_docs and any(retrieved_docs[0])
 
+    # Step 2.5: Handle pinned contexts
+    pinned_context_str = ""
+    if pinned_contexts and len(pinned_contexts) > 0:
+        pinned_context_str = "The user has explicitly pinned the following prior messages as core context for this query:\n"
+        for pc in pinned_contexts:
+            pinned_context_str += f"- {pc}\n"
+        pinned_context_str += "\nUse this pinned context prominently to guide your answer.\n\n"
+
     if has_local_data:
         # ✅ Found relevant local chunks
         system_prompt = f"""
@@ -169,6 +177,7 @@ def answer_query(query, chat_history=None, level="standard", mode="standard", st
         Your goal is to help the user learn and understand.
         {level_instruction}
         
+        {pinned_context_str}
         Use the following document segments to answer accurately. 
         If the data is insufficient, say so and use your own knowledge.
         --------------------
@@ -195,6 +204,7 @@ def answer_query(query, chat_history=None, level="standard", mode="standard", st
                 (Internal Note: You are currently running on the '{model_name}' model. If the user asks which model you are, explicitly state this model name.)
                 {level_instruction}
                 
+                {pinned_context_str}
                 No relevant uploaded documents found, so use these web results to help:
                 --------------------
                 {search_results}
@@ -204,6 +214,8 @@ def answer_query(query, chat_history=None, level="standard", mode="standard", st
                 You are Intellectra, a friendly and concise AI tutor.
                 (Internal Note: You are currently running on the '{model_name}' model. If the user asks which model you are, explicitly state this model name.)
                 {level_instruction}
+                
+                {pinned_context_str}
                 Respond naturally using your own general knowledge.
                 """
 
@@ -213,6 +225,8 @@ def answer_query(query, chat_history=None, level="standard", mode="standard", st
             You are Intellectra, a world-class AI tutor.
             (Internal Note: You are currently running on the '{model_name}' model. If the user asks which model you are, explicitly state this model name.)
             {level_instruction}
+            
+            {pinned_context_str}
             No documents have been uploaded yet. Respond naturally and helpfully using your knowledge.
             """
 

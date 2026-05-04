@@ -372,9 +372,15 @@ function appendMessage(text, sender, sources = [], messageId = null, widgets = [
         chatTimeline.appendChild(timelineItem);
     }
 
-    const nameHtml = sender === 'user'  
-        ? `<div class="sender-name">You <i class="ri-user-smile-fill"></i></div>`
-        : `<div class="sender-name"><i class="ri-flashlight-fill"></i> Intellectra</div>`;
+    const bubbleId = `bubble-${Math.random().toString(36).substring(2, 9)}`;
+
+    const nameHtml = `
+        <div class="msg-header">
+            <div class="msg-name">
+                ${sender === 'user' ? '<i class="ri-user-line"></i> You' : '<i class="ri-sparkling-2-line"></i> Intellectra'}
+            </div>
+            <button class="copy-bubble-btn" onclick="copyToClipboard('${bubbleId}')" title="Copy Message"><i class="ri-file-copy-line"></i></button>
+        </div>`;
 
     // Parse Markdown and Math robustly
     let formattedText = "";
@@ -393,54 +399,76 @@ function appendMessage(text, sender, sources = [], messageId = null, widgets = [
         </div>`;
     }
 
-    // Flashcards & Quiz buttons for AI messages
+    // Flashcards, Quiz & Pin buttons
     let actionsHtml = "";
-    const bubbleId = `bubble-${Math.random().toString(36).substring(2, 9)}`;
+    const encodedText = text.replace(/"/g, '&quot;');
     
-    if (sender === 'ai' && text.length > 50 && !text.startsWith("⚠️") && !text.startsWith("Assalamu alaikum")) {
-        const encodedText = text.replace(/"/g, '&quot;');
-        
-        const flashcardWidgets = widgets.filter(w => w.widget_type === 'flashcard');
-        const quizWidgets = widgets.filter(w => w.widget_type === 'quiz');
-        const conceptWidgets = widgets.filter(w => w.widget_type === 'concept_check');
-        
-        const totalMaterials = flashcardWidgets.length + quizWidgets.length + conceptWidgets.length;
+    const isConceptCheckMsg = /diagnostic questions|concept check/i.test(text);
 
-        let viewMaterialsBtn = totalMaterials > 0 ? 
-            `<button class="flashcard-subtle-btn view-btn" id="view-materials-btn-${bubbleId}" onclick="toggleMaterials('${bubbleId}')" title="Review Materials">
-                <i class="ri-eye-line"></i> Review Materials (<span id="materials-count-${bubbleId}">${totalMaterials}</span>)
-            </button>` : "";
+    // Determine materials count for AI messages
+    let materialsCountHtml = "";
+    if (sender === 'ai' && widgets.length > 0) {
+        const total = widgets.length;
+        const btnLabel = isConceptCheckMsg ? "Review Concept Check" : `Review Materials (${total})`;
+        materialsCountHtml = `
+            <button class="flashcard-subtle-btn view-btn" id="view-materials-btn-${bubbleId}" onclick="toggleMaterials('${bubbleId}')" title="${btnLabel}">
+                <i class="ri-eye-line"></i> ${btnLabel}
+            </button>`;
+    }
 
+    // Always show actions for both user and AI (if text is substantial)
+    if (text.length > 10 && !text.startsWith("⚠️")) {
         actionsHtml = `
             <div class="msg-actions">
+                <button class="flashcard-subtle-btn pin-btn" data-text="${encodedText}" onclick="pinContext('${bubbleId}', this.dataset.text, ${messageId})" id="btn-pin-${bubbleId}" title="Pin Context">
+                    <i class="ri-pushpin-line"></i>
+                </button>
+                ${(sender === 'ai' && !isConceptCheckMsg) ? `
                 <button class="flashcard-subtle-btn" data-text="${encodedText}" onclick="generateFlashcards('${bubbleId}', this.dataset.text, ${messageId})" id="btn-flashcard-${bubbleId}" title="Generate Flashcards">
                     <i class="ri-stack-line"></i> Flashcards
                 </button>
                 <button class="flashcard-subtle-btn" data-text="${encodedText}" onclick="generateQuiz('${bubbleId}', this.dataset.text, ${messageId})" id="btn-quiz-${bubbleId}" title="Generate Quiz">
                     <i class="ri-questionnaire-line"></i> Quiz
                 </button>
-                <button class="flashcard-subtle-btn" data-text="${encodedText}" onclick="pinContext('${bubbleId}', this.dataset.text, ${messageId})" id="btn-pin-${bubbleId}" title="Pin Context">
-                    <i class="ri-pushpin-line"></i> Pin Context
-                </button>
-                ${viewMaterialsBtn}
+                ` : ''}
+                ${materialsCountHtml}
             </div>
             
+            ${sender === 'ai' ? `
             <div id="materials-container-${bubbleId}" class="materials-container widget-display-container" style="display: none;">
                 <div class="materials-tabs">
+                    ${!isConceptCheckMsg ? `
                     <button class="material-tab active" onclick="switchMaterialTab('${bubbleId}', 'flashcards')" id="tab-flashcards-${bubbleId}">Flashcards</button>
                     <button class="material-tab" onclick="switchMaterialTab('${bubbleId}', 'quiz')" id="tab-quiz-${bubbleId}">Quizzes</button>
-                    <button class="material-tab" onclick="switchMaterialTab('${bubbleId}', 'concept')" id="tab-concept-${bubbleId}">Concept Checks</button>
+                    ` : `
+                    <button class="material-tab active" onclick="switchMaterialTab('${bubbleId}', 'concept')" id="tab-concept-${bubbleId}">Concept Checks</button>
+                    `}
                 </div>
-                <div id="flashcards-container-${bubbleId}" class="material-content" style="display: block;"></div>
+                <div id="flashcards-container-${bubbleId}" class="material-content" style="${!isConceptCheckMsg ? 'display: block;' : 'display: none;'}"></div>
                 <div id="quiz-container-${bubbleId}" class="material-content" style="display: none;"></div>
-                <div id="concept-container-${bubbleId}" class="material-content" style="display: none;"></div>
+                <div id="concept-container-${bubbleId}" class="material-content" style="${isConceptCheckMsg ? 'display: block;' : 'display: none;'}"></div>
             </div>
+            ` : ''}
         `;
+    }
+
+    // Pins attached to this specific message
+    let pinsHtml = "";
+    if (sender === 'user' && window.currentPins && window.currentPins.length > 0) {
+        pinsHtml = `<div class="bubble-pins-context">
+            <div class="pins-label">Referencing:</div>
+            ${window.currentPins.map(p => `
+                <div class="bubble-pin-chip" onclick="scrollToMessage('${p.bubbleId}')">
+                    <i class="ri-pushpin-fill"></i> ${p.text.substring(0, 40)}${p.text.length > 40 ? '...' : ''}
+                </div>
+            `).join('')}
+        </div>`;
     }
 
     wrapper.innerHTML = `
         ${nameHtml}
         <div class="msg-bubble" id="${bubbleId}">
+            ${pinsHtml}
             ${formattedText}${sourcesHtml}
             ${actionsHtml}
         </div>
@@ -583,6 +611,35 @@ function renderSavedFlashcards(widgets, container) {
     });
 }
 
+function renderSavedQuizzes(widgets, container) {
+    container.innerHTML = '';
+    widgets.forEach((w, idx) => {
+        appendSavedQuiz(w, container, idx + 1);
+    });
+}
+
+function renderSavedConceptChecks(widgets, container) {
+    container.innerHTML = '';
+    widgets.forEach((w, idx) => {
+        appendSavedConceptCheck(w, container, idx + 1);
+    });
+}
+
+window.copyToClipboard = function(elementId) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    
+    // Extract text only (ignore actions and sources)
+    const text = el.innerText.split('Sources:')[0].split('Pin Context')[0].trim();
+    
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = document.querySelector(`[onclick="copyToClipboard('${elementId}')"]`);
+        const originalIcon = btn.innerHTML;
+        btn.innerHTML = '<i class="ri-check-line" style="color: #4ade80;"></i>';
+        setTimeout(() => btn.innerHTML = originalIcon, 2000);
+    });
+};
+
 function appendSavedFlashcard(widget, container, setNumber = null) {
     const setNum = setNumber || (container.querySelectorAll('.widget-set').length + 1);
     const div = document.createElement('div');
@@ -592,6 +649,39 @@ function appendSavedFlashcard(widget, container, setNumber = null) {
     renderFlashcards(widget.data, document.getElementById(`fc-set-${widget.id}`));
     
     const bubbleId = container.id.replace('flashcards-container-', '');
+    updateWidgetCountBtn(bubbleId);
+}
+
+function appendSavedQuiz(widget, container, setNumber = null) {
+    const setNum = setNumber || (container.querySelectorAll('.widget-set').length + 1);
+    const div = document.createElement('div');
+    div.className = 'widget-set';
+    div.innerHTML = `<div class="widget-set-title">Quiz Set ${setNum}</div><div id="quiz-set-${widget.id}"></div>`;
+    container.appendChild(div);
+    
+    const userAnswers = widget.state && widget.state.userAnswers ? widget.state.userAnswers : [];
+    const score = widget.state && widget.state.score ? widget.state.score : 0;
+    const isCompleted = widget.state && widget.state.completed;
+    
+    renderQuiz(widget.data, document.getElementById(`quiz-set-${widget.id}`), 0, widget.id, userAnswers, score, isCompleted);
+    
+    const bubbleId = container.id.replace('quiz-container-', '');
+    updateWidgetCountBtn(bubbleId);
+}
+
+function appendSavedConceptCheck(widget, container, setNumber = null) {
+    const setNum = setNumber || (container.querySelectorAll('.widget-set').length + 1);
+    const div = document.createElement('div');
+    div.className = 'widget-set';
+    div.innerHTML = `<div class="widget-set-title">Concept Check ${setNum}</div><div id="concept-set-${widget.id}"></div>`;
+    container.appendChild(div);
+    
+    const userAnswers = widget.state && widget.state.userAnswers ? widget.state.userAnswers : [];
+    const isCompleted = widget.state && widget.state.completed;
+    
+    renderConceptCheck(widget.data, document.getElementById(`concept-set-${widget.id}`), 0, widget.id, userAnswers, isCompleted);
+    
+    const bubbleId = container.id.replace('concept-container-', '');
     updateWidgetCountBtn(bubbleId);
 }
 
@@ -694,13 +784,6 @@ async function generateQuiz(bubbleId, text, messageId) {
         btn.disabled = false;
         btn.classList.remove("loading");
     }
-}
-
-function renderSavedQuizzes(widgets, container) {
-    container.innerHTML = '';
-    widgets.forEach((w, idx) => {
-        appendSavedQuiz(w, container, idx + 1);
-    });
 }
 
 function appendSavedQuiz(widget, container, setNumber = null) {
@@ -878,99 +961,24 @@ function renderPinnedContexts() {
     
     container.style.display = "flex";
     container.innerHTML = pinnedContexts.map(p => `
-        <div class="pinned-bubble">
+        <div class="pinned-bubble" onclick="scrollToMessage('${p.bubbleId}')">
             <div class="pinned-text">${p.text.substring(0, 60)}${p.text.length > 60 ? '...' : ''}</div>
-            <button onclick="unpinContext(${p.messageId})"><i class="ri-close-line"></i></button>
+            <button onclick="event.stopPropagation(); unpinContext(${p.messageId})"><i class="ri-close-line"></i></button>
         </div>
     `).join("");
 }
 
-window.triggerGlobalConceptCheck = async function() {
-    const queryInput = document.getElementById('query');
-    const sendBtn = document.getElementById('sendBtn');
-    const text = queryInput.value.trim();
-    
-    if (pinnedContexts.length === 0 && !text) {
-        // Just return, do not send empty message
-        return;
-    }
-
-    let combinedText = pinnedContexts.map(p => p.text).join("\n\n");
-    if (text) {
-        combinedText += (combinedText ? "\n\nAdditional Context:\n" : "") + text;
-    }
-    
-    const btn = document.getElementById('globalConceptCheckBtn');
-    const originalText = btn.innerText;
-    btn.innerHTML = `<i class="ri-loader-4-line ri-spin"></i> Checking...`;
-    btn.style.pointerEvents = "none";
-    queryInput.disabled = true;
-    if (sendBtn) sendBtn.disabled = true;
-    
-    try {
-        const res = await fetch("http://127.0.0.1:5000/api/concept_check/generate_global", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: combinedText, session_id: currentSessionId })
-        });
-        
-        const data = await res.json();
-        
-        if (data.error) {
-            btn.innerText = originalText;
-            btn.style.pointerEvents = "auto";
-            queryInput.disabled = false;
-            if (sendBtn) sendBtn.disabled = false;
-            appendSystemMessage(data.error);
-            return;
+window.scrollToMessage = function(bubbleId) {
+    const target = document.getElementById(bubbleId);
+    if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const wrapper = target.closest('.msg-wrapper');
+        if (wrapper) {
+            wrapper.classList.add('highlight-flash');
+            setTimeout(() => wrapper.classList.remove('highlight-flash'), 2000);
         }
-        
-        if (data.questions && data.questions.length > 0) {
-            btn.innerText = originalText;
-            btn.style.pointerEvents = "auto";
-            queryInput.disabled = false;
-            if (sendBtn) sendBtn.disabled = false;
-            
-            queryInput.value = "";
-            pinnedContexts = [];
-            renderPinnedContexts();
-            
-            await loadSession(currentSessionId);
-            
-            setTimeout(() => {
-                const bubbles = document.querySelectorAll('.msg-bubble');
-                if (bubbles.length > 0) {
-                    const lastBubbleId = bubbles[bubbles.length - 1].id;
-                    const materialsContainer = document.getElementById(`materials-container-${lastBubbleId}`);
-                    if (materialsContainer) {
-                        materialsContainer.style.display = 'block';
-                        switchMaterialTab(lastBubbleId, 'concept');
-                    }
-                }
-            }, 500);
-        }
-    } catch (err) {
-        console.error(err);
-        btn.innerText = originalText;
-        btn.style.pointerEvents = "auto";
-        queryInput.disabled = false;
-        if (sendBtn) sendBtn.disabled = false;
     }
 };
-
-function appendSystemMessage(text) {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'msg-wrapper msg-ai fade-in';
-    wrapper.innerHTML = `
-        <div class="msg-name">System</div>
-        <div class="msg-bubble" style="background: rgba(248, 113, 113, 0.1); border-color: #f87171; color: #f87171;">
-            ${text}
-        </div>
-    `;
-    const messagesDiv = document.getElementById("messages");
-    messagesDiv.appendChild(wrapper);
-    messagesDiv.scrollTo({ top: messagesDiv.scrollHeight, behavior: 'smooth' });
-}
 
 window.renderSavedConceptChecks = function(widgets, container) {
     container.innerHTML = '';
@@ -998,21 +1006,24 @@ window.appendSavedConceptCheck = function(widget, container, setNumber = null) {
 
 window.renderConceptCheck = function(questions, container, currentIndex = 0, widgetId = null, userAnswers = [], isReviewMode = false, originalText = "") {
     if (currentIndex >= questions.length) {
-        let retakeBtnHtml = isReviewMode ? 
-            `<button class="flashcard-subtle-btn" style="margin-top:15px; width: 100%; justify-content:center;" onclick="renderConceptCheck(JSON.parse(this.dataset.q), document.getElementById('${container.id}'), 0, ${widgetId}, [], false, '${originalText.replace(/'/g, "\\'")}')" data-q='${JSON.stringify(questions).replace(/'/g, "\\'")}'>
-                <i class="ri-refresh-line"></i> Retake
-            </button>` : '';
-
-        container.innerHTML = `
-            <div class="quiz-container">
-                <div class="quiz-completed" style="text-align: center; padding: 20px;">
-                    <i class="ri-check-double-line" style="font-size: 2.5rem; color: #4ade80;"></i>
-                    <p style="margin-top: 10px; font-weight: 500;">Evaluation Complete!</p>
-                    <p style="font-size: 0.9rem; margin-top: 10px; color: var(--text-muted);">Please check the chat for Intellectra's tailored explanation.</p>
-                    ${retakeBtnHtml}
+        if (isReviewMode) {
+             const qsStr = JSON.stringify(questions).replace(/'/g, "\\'");
+             const uaStr = JSON.stringify(userAnswers).replace(/'/g, "\\'");
+             container.innerHTML = `
+                <div class="quiz-container">
+                    <div class="quiz-completed" style="text-align: center; padding: 20px;">
+                        <i class="ri-check-double-line" style="font-size: 2.5rem; color: #4ade80;"></i>
+                        <p style="margin-top: 10px; font-weight: 500;">Review Complete!</p>
+                        <button class="flashcard-subtle-btn" style="margin-top:15px; width: 100%; justify-content:center;" onclick="changeConceptQuestion('${container.id}', -${questions.length})">
+                            <i class="ri-eye-line"></i> Re-review
+                        </button>
+                    </div>
                 </div>
-            </div>
-        `;
+            `;
+            return;
+        }
+        // Transition from answering to review mode
+        renderConceptCheck(questions, container, 0, widgetId, userAnswers, true, originalText);
         return;
     }
 
@@ -1096,6 +1107,8 @@ window.changeConceptQuestion = function(containerId, direction) {
     const originalText = decodeURIComponent(container.dataset.originalText || "");
     
     currentIndex += direction;
+    if (currentIndex < 0) currentIndex = 0; // Guard for re-review reset
+    
     renderConceptCheck(questions, container, currentIndex, widgetId, userAnswers, isReviewMode, originalText);
 };
 
@@ -1104,6 +1117,9 @@ window.submitConceptCheck = async function(containerId) {
     const btn = container.querySelector('.submit-btn');
     const queryInput = document.getElementById('query');
     const sendBtn = document.getElementById('sendBtn');
+    
+    if (isGenerating) return; // Block multiple submissions
+    isGenerating = true;
     
     if (btn) {
         btn.innerHTML = `<i class="ri-loader-4-line ri-spin"></i> Evaluating...`;
@@ -1153,9 +1169,13 @@ window.submitConceptCheck = async function(containerId) {
             appendMessage(data.evaluation, "ai", [], data.message_id, []);
             
             // Re-enable chat input
+            isGenerating = false;
+            sendBtn.innerHTML = '<i class="ri-send-plane-fill"></i>';
             if (queryInput) queryInput.disabled = false;
             if (sendBtn) sendBtn.disabled = false;
         } else {
+            isGenerating = false;
+            sendBtn.innerHTML = '<i class="ri-send-plane-fill"></i>';
             alert("Error evaluating answers.");
             if (btn) { btn.innerHTML = `Submit Answers <i class="ri-send-plane-fill"></i>`; btn.disabled = false; }
             if (queryInput) queryInput.disabled = false;
@@ -1292,6 +1312,11 @@ async function loadSession(sessionId, title) {
     messagesDiv.innerHTML = "";
     chatTimeline.innerHTML = "";
     userMessageCount = 0;
+    
+    // Session isolation: clear pins when switching chats
+    pinnedContexts = [];
+    renderPinnedContexts();
+
     fetchSessions();
 
     try {
@@ -1323,6 +1348,11 @@ function startNewChat() {
     messagesDiv.innerHTML = "";
     chatTimeline.innerHTML = "";
     userMessageCount = 0;
+
+    // Clear pins for new session
+    pinnedContexts = [];
+    renderPinnedContexts();
+
     fetchSessions();
     
     if(window.innerWidth <= 768) closeSidebar();
@@ -1422,30 +1452,37 @@ function finalizeStreamContent(bubbleId, text, sources, messageId) {
 
     // Add action buttons (flashcards, quiz)
     let actionsHtml = "";
+    const isConceptCheckMsg = /diagnostic questions|concept check/i.test(text);
+
     if (text.length > 50 && !text.startsWith("⚠️") && !text.startsWith("Assalamu alaikum")) {
         const encodedText = text.replace(/"/g, '&quot;');
         actionsHtml = `
             <div class="msg-actions">
+                <button class="flashcard-subtle-btn pin-btn" data-text="${encodedText}" onclick="pinContext('${bubbleId}', this.dataset.text, ${messageId})" id="btn-pin-${bubbleId}" title="Pin Context">
+                    <i class="ri-pushpin-line"></i>
+                </button>
+                ${!isConceptCheckMsg ? `
                 <button class="flashcard-subtle-btn" data-text="${encodedText}" onclick="generateFlashcards('${bubbleId}', this.dataset.text, ${messageId})" id="btn-flashcard-${bubbleId}" title="Generate Flashcards">
                     <i class="ri-stack-line"></i> Flashcards
                 </button>
                 <button class="flashcard-subtle-btn" data-text="${encodedText}" onclick="generateQuiz('${bubbleId}', this.dataset.text, ${messageId})" id="btn-quiz-${bubbleId}" title="Generate Quiz">
                     <i class="ri-questionnaire-line"></i> Quiz
                 </button>
-                <button class="flashcard-subtle-btn" data-text="${encodedText}" onclick="pinContext('${bubbleId}', this.dataset.text, ${messageId})" id="btn-pin-${bubbleId}" title="Pin Context">
-                    <i class="ri-pushpin-line"></i> Pin Context
-                </button>
+                ` : ''}
             </div>
             
             <div id="materials-container-${bubbleId}" class="materials-container widget-display-container" style="display: none;">
                 <div class="materials-tabs">
+                    ${!isConceptCheckMsg ? `
                     <button class="material-tab active" onclick="switchMaterialTab('${bubbleId}', 'flashcards')" id="tab-flashcards-${bubbleId}">Flashcards</button>
                     <button class="material-tab" onclick="switchMaterialTab('${bubbleId}', 'quiz')" id="tab-quiz-${bubbleId}">Quizzes</button>
-                    <button class="material-tab" onclick="switchMaterialTab('${bubbleId}', 'concept')" id="tab-concept-${bubbleId}">Concept Checks</button>
+                    ` : `
+                    <button class="material-tab active" onclick="switchMaterialTab('${bubbleId}', 'concept')" id="tab-concept-${bubbleId}">Concept Checks</button>
+                    `}
                 </div>
-                <div id="flashcards-container-${bubbleId}" class="material-content" style="display: block;"></div>
+                <div id="flashcards-container-${bubbleId}" class="material-content" style="${!isConceptCheckMsg ? 'display: block;' : 'display: none;'}"></div>
                 <div id="quiz-container-${bubbleId}" class="material-content" style="display: none;"></div>
-                <div id="concept-container-${bubbleId}" class="material-content" style="display: none;"></div>
+                <div id="concept-container-${bubbleId}" class="material-content" style="${isConceptCheckMsg ? 'display: block;' : 'display: none;'}"></div>
             </div>
         `;
     }
@@ -1457,10 +1494,19 @@ function finalizeStreamContent(bubbleId, text, sources, messageId) {
 async function sendMessage(retryText = null) {
     if (isGenerating) return;
 
+    const isConceptCheck = document.getElementById('conceptCheckToggle').checked;
     const query = retryText || queryInput.value.trim();
-    if (!query) return;
     
-    if (!retryText) appendMessage(query, "user");
+    // Allow empty message only if Concept Check is ON and something is pinned
+    if (!query && !(isConceptCheck && pinnedContexts.length > 0)) return;
+    
+    const displayQuery = query || "Evaluate my understanding of the pinned context.";
+    
+    if (!retryText) {
+        window.currentPins = [...pinnedContexts];
+        appendMessage(displayQuery, "user");
+        window.currentPins = null; // Reset immediately
+    }
     
     queryInput.value = "";
     queryInput.style.height = 'auto';
@@ -1490,7 +1536,9 @@ async function sendMessage(retryText = null) {
                 session_id: currentSessionId,
                 level: currentStudyLevel,
                 mode: isThinkingMode ? "thinking" : "standard",
-                stream: true 
+                stream: true,
+                is_concept_check: document.getElementById('conceptCheckToggle') ? document.getElementById('conceptCheckToggle').checked : false,
+                pinned_contexts: pinnedContexts.map(p => p.text)
             })
         });
 
@@ -1529,6 +1577,10 @@ async function sendMessage(retryText = null) {
                         }
                         if (data.sources) sources = data.sources;
                         
+                        if (data.error) {
+                            throw new Error(data.error); // Re-throw to be caught outside
+                        }
+                        
                         if (data.token) {
                             if (!streamInfo) {
                                 typingIndicator.remove();
@@ -1547,11 +1599,40 @@ async function sendMessage(retryText = null) {
                         if (data.done) {
                             aiMsgId = data.message_id;
                             if (streamInfo) {
-                                finalizeStreamContent(streamInfo.bubbleId, fullResponse, sources, aiMsgId);
+                                if (data.concept_check && data.questions) {
+                                    // Remove the loading text and finalize
+                                    const dummyText = "Here is your concept check! I have analyzed the context and prepared 3 diagnostic questions to help evaluate your understanding of this topic.";
+                                    updateStreamContent(streamInfo.bubbleId, dummyText, sources);
+                                    
+                                    // Manually add the widget and switch tab
+                                    finalizeStreamContent(streamInfo.bubbleId, dummyText, sources, aiMsgId);
+                                    
+                                    setTimeout(() => {
+                                        const materialsContainer = document.getElementById(`materials-container-${streamInfo.bubbleId}`);
+                                        if (materialsContainer) {
+                                            materialsContainer.style.display = 'block';
+                                            const conceptContainer = document.getElementById(`concept-container-${streamInfo.bubbleId}`);
+                                            renderConceptCheck(data.questions, conceptContainer, 0, data.widget_id, [], false, "");
+                                            switchMaterialTab(streamInfo.bubbleId, 'concept');
+                                        }
+                                        
+                                        // Auto unpin contexts and uncheck the toggle after successful generation
+                                        pinnedContexts = [];
+                                        renderPinnedContexts();
+                                        const toggle = document.getElementById('conceptCheckToggle');
+                                        if (toggle) toggle.checked = false;
+                                        
+                                    }, 300);
+                                } else {
+                                    finalizeStreamContent(streamInfo.bubbleId, fullResponse, sources, aiMsgId);
+                                }
                             }
                             fetchSessions();
                         }
                     } catch (e) {
+                        if (e.message && e.message !== "Unexpected end of JSON input" && !e.message.includes("JSON")) {
+                            throw e; // Rethrow actual backend errors
+                        }
                         console.error("Error parsing stream chunk:", e);
                     }
                 }

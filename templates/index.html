@@ -79,6 +79,8 @@
                     </div>
                     <button id="cancel-upload-btn" title="Cancel Upload"><i class="ri-close-line"></i></button>
                 </div>
+                <div class="input-container">
+                <div id="pinned-context-container" class="pinned-context-container" style="display: none;"></div>
                 <div class="input-main-row">
                     <button class="action-btn" id="plusBtn" title="More Tools">
                         <i class="ri-add-line"></i>
@@ -111,7 +113,11 @@
                         </div>
                         <i class="ri-arrow-right-s-line"></i>
                     </button>
-                    <span class="concept-check-trigger" id="globalConceptCheckBtn" onclick="triggerGlobalConceptCheck()">generate concept check for this</span>
+                    <label class="concept-check-toggle" title="Generate a Concept Check instead of a normal response">
+                        <input type="checkbox" id="conceptCheckToggle">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">Concept Check</span>
+                    </label>
                 </div>
             </div>
         </div>
