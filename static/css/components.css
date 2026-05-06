@@ -5,7 +5,7 @@
 .scroll-btn {
     position: absolute;
     right: 40px;
-    bottom: 80px;
+    bottom: 100px;
     width: 36px;
     height: 36px;
     border-radius: 50%;
@@ -19,8 +19,8 @@
     opacity: 0;
     pointer-events: none;
     transition: all 0.3s ease;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    z-index: 20;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    z-index: 2500;
 }
 
 .scroll-btn.visible {

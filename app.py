@@ -74,6 +74,7 @@ def chat():
         mode = data.get("mode", "standard")
         stream = data.get("stream", False)
         is_concept_check = data.get("is_concept_check", False)
+        web_search = data.get("web_search", False)
         pinned_contexts = data.get("pinned_contexts", [])
 
         if not query and not (is_concept_check and pinned_contexts):
@@ -91,7 +92,7 @@ def chat():
             # Concept Check Generation Flow
             topic = query
             if pinned_contexts:
-                topic = "Context: " + " ".join(pinned_contexts) + "\nQuery: " + topic
+                topic = f"\n[CRITICAL PINNED CONTEXT START]\n" + "\n".join(pinned_contexts) + "\n[CRITICAL PINNED CONTEXT END]\n\n" + f"TOPIC: {topic}"
                 
             def generate_concept_check_stream():
                 try:
@@ -141,25 +142,36 @@ def chat():
             return response
 
         elif stream:
-            gen, sources = answer_query(query, chat_history=history, level=level, mode=mode, stream=True, session_id=session_id, pinned_contexts=pinned_contexts)
+            gen, sources = answer_query(query, chat_history=history, level=level, mode=mode, stream=True, session_id=session_id, pinned_contexts=pinned_contexts, web_search=web_search)
             
             def generate():
                 full_response = ""
                 # Send metadata first
                 yield f"data: {json.dumps({'session_id': session_id, 'sources': sources})}\n\n"
                 
-                for chunk in gen:
-                    if hasattr(chunk, 'content'):
-                        token = chunk.content
-                    else:
-                        token = str(chunk)
-                    full_response += token
-                    yield f"data: {json.dumps({'token': token})}\n\n"
-                
-                # Save BOTH messages ONLY after generation succeeds
-                database.add_message(session_id, "user", query)
-                ai_msg_id = database.add_message(session_id, "ai", full_response)
-                yield f"data: {json.dumps({'message_id': ai_msg_id, 'done': True})}\n\n"
+                try:
+                    for chunk in gen:
+                        # If it's a status dictionary from our search tool
+                        if isinstance(chunk, dict):
+                            yield f"data: {json.dumps(chunk)}\n\n"
+                            continue
+                            
+                        if hasattr(chunk, 'content'):
+                            token = chunk.content
+                        else:
+                            token = str(chunk)
+                        full_response += token
+                        yield f"data: {json.dumps({'token': token})}\n\n"
+                except GeneratorExit:
+                    pass
+                finally:
+                    # Save BOTH messages even if interrupted (stop generation)
+                    database.add_message(session_id, "user", query)
+                    ai_msg_id = database.add_message(session_id, "ai", full_response)
+                    try:
+                        yield f"data: {json.dumps({'message_id': ai_msg_id, 'done': True})}\n\n"
+                    except GeneratorExit:
+                        pass
                 
             response = Response(stream_with_context(generate()), mimetype='text/event-stream')
             response.headers['Cache-Control'] = 'no-cache'
@@ -168,7 +180,7 @@ def chat():
 
         else:
             # Call the answer function from api.py with history context and level
-            result = answer_query(query, chat_history=history, level=level, mode=mode, stream=False, session_id=session_id, pinned_contexts=pinned_contexts)
+            result = answer_query(query, chat_history=history, level=level, mode=mode, stream=False, session_id=session_id, pinned_contexts=pinned_contexts, web_search=web_search)
             response_text = result["response"]
             sources = result["sources"]
 

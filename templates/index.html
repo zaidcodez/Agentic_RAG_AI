@@ -10,10 +10,13 @@
     <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
     <!-- CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.1/github-markdown.min.css">
     <!-- KaTeX (Math) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
     <!-- Highlight.js (Code) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <!-- Markdown-it -->
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it@14.1.0/dist/markdown-it.min.js"></script>
 </head>
 <body>
 
@@ -109,24 +112,32 @@
                 <div class="input-footer-row">
                     <button class="mode-toggle-btn" id="modeSelectBtn">
                         <div class="mode-text-wrapper" id="modeTextWrapper">
-                            <span class="mode-text-item active" id="currentModeText">Standard</span>
+                            <span class="mode-text-item active" id="mode-standard">Standard</span>
+                            <span class="mode-text-item" id="mode-thinking">Thinking</span>
                         </div>
                         <i class="ri-arrow-right-s-line"></i>
                     </button>
-                    <label class="concept-check-toggle" title="Generate a Concept Check instead of a normal response">
-                        <input type="checkbox" id="conceptCheckToggle">
-                        <span class="toggle-slider"></span>
-                        <span class="toggle-label">Concept Check</span>
-                    </label>
+                    <div class="footer-toggles">
+                        <label class="concept-check-toggle" title="Search the web for real-time information">
+                            <input type="checkbox" id="webSearchToggle">
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label"><i class="ri-global-line"></i> Web Search</span>
+                        </label>
+                        <label class="concept-check-toggle" title="Generate a Concept Check instead of a normal response">
+                            <input type="checkbox" id="conceptCheckToggle">
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label"><i class="ri-lightbulb-line"></i> Concept Check</span>
+                        </label>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- JS Libraries -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
     <!-- App Logic -->
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>

@@ -106,8 +106,31 @@ def has_uploaded_docs(session_id=None):
 # ----------------------------
 # Helper: Answer query
 # ----------------------------
-def answer_query(query, chat_history=None, level="standard", mode="standard", stream=False, session_id=None, pinned_contexts=None):
+def answer_query(query, chat_history=None, level="standard", mode="standard", stream=False, session_id=None, pinned_contexts=None, web_search=False):
     query_lower = query.strip().lower()
+    has_local_data = False
+    # GLOBAL FORMATTING COMMAND — appended to every system prompt
+    global_formatting = r"""
+
+[MANDATORY FORMATTING RULES]
+- Use **bold** for step labels, key terms, and headers
+- Use numbered lists for steps: **Step 1:**, **Step 2:**, etc. if breaking down a process.
+- Put a blank line between every paragraph and step
+- Use ``` code blocks for code only
+
+[MATH FORMATTING - ONLY IF YOUR RESPONSE INCLUDES MATH OR EQUATIONS]
+- ALL math MUST use LaTeX delimiters. There is NO other option.
+- Inline math: wrap in single dollar signs → $x^2 + y = 5$
+- Block/display math (equations, integrals, matrices): wrap in double dollar signs → $$\int_0^{\pi} \sin(x)\,dx = 2$$
+- Fractions: $$\frac{a}{b}$$
+- Square roots: $$\sqrt{x}$$
+- Matrices: $$\begin{pmatrix} a & b \\ c & d \end{pmatrix}$$
+- Greek letters: $\alpha$, $\beta$, $\pi$, $\theta$
+- NEVER write raw symbols like ∫, ∑, √, π outside of $...$ delimiters
+- NEVER write "x^2" without dollar signs. ALWAYS write "$x^2$"
+
+CRITICAL: If the user's question is NOT about math (e.g., weather, history, reviews), DO NOT force math, matrices, or variables into your answer. Just answer naturally in plain English!
+"""
 
     # Step 0: Study Level Instructions
     level_instruction = ""
@@ -123,7 +146,7 @@ def answer_query(query, chat_history=None, level="standard", mode="standard", st
         level_instruction += "\nTHINKING MODE ACTIVE: Before providing your final answer, think step-by-step. Analyze the question, consider different perspectives, and show your internal reasoning process. Be extremely thorough and analytical."
 
     # Step 0.2: Casual greetings
-    if query_lower in ["hi", "hello", "hey", "what’s up", "yo", "good morning", "good evening"] and not stream:
+    if query_lower in ["hi", "hello", "hey", "what's up", "yo", "good morning", "good evening"] and not stream:
         return {
             "response": "Hey there! 😊 How can I help you today?",
             "sources": []
@@ -147,6 +170,7 @@ def answer_query(query, chat_history=None, level="standard", mode="standard", st
 
     # Step 2: If docs exist, try local search
     retrieved_docs = []
+    valid_metas = []
     if docs_exist:
         # Retrieve more context in thinking mode
         n_results = 10 if mode == "thinking" else 4
@@ -157,17 +181,53 @@ def answer_query(query, chat_history=None, level="standard", mode="standard", st
             n_results=n_results,
             where=where_clause
         )
-        retrieved_docs = results.get("documents", [])
+        
+        raw_docs = results.get("documents", [[]])[0]
+        raw_dists = results.get("distances", [[]])[0]
+        raw_metas = results.get("metadatas", [[]])[0]
+        
+        # Filter by distance threshold (L2 distance: < 1.4 is usually semantically related)
+        for doc, dist, meta in zip(raw_docs, raw_dists, raw_metas):
+            if dist < 1.4:
+                retrieved_docs.append(doc)
+                valid_metas.append(meta)
 
-    has_local_data = retrieved_docs and any(retrieved_docs[0])
+    has_local_data = len(retrieved_docs) > 0
+
+    # Step 2.6: Smart Intent Detection (If web_search toggle is OFF)
+    auto_web_search = False
+    if not web_search and not has_local_data:
+        # 1. Local Heuristic Check (Fast & Offline-friendly)
+        real_time_indicators = ["current", "latest", "best", "price", "news", "today", "who is", "who are", "ranking", "winner", "stock"]
+        if any(word in query_lower for word in real_time_indicators):
+            auto_web_search = True
+            print(f"🔍 [SMART SEARCH] Intent: YES (Reason: Real-time Keywords)")
+        else:
+            # 2. AI Intent Fallback
+            try:
+                intent_check = llm.invoke([
+                    SystemMessage(content="Determine if this query needs real-time web info or data from 2024-2026. Respond only 'YES' or 'NO'."),
+                    HumanMessage(content=query)
+                ]).content.strip().upper()
+                auto_web_search = "YES" in intent_check
+                if auto_web_search:
+                    print(f"🔍 [SMART SEARCH] Intent: YES (Reason: AI Analysis)")
+            except Exception as e:
+                print(f"⚠️ [SMART SEARCH] AI Intent check failed: {e}")
+                auto_web_search = False
+    
+    if web_search:
+        print(f"🔍 [SMART SEARCH] Intent: YES (Reason: Manual Toggle)")
 
     # Step 2.5: Handle pinned contexts
     pinned_context_str = ""
     if pinned_contexts and len(pinned_contexts) > 0:
-        pinned_context_str = "The user has explicitly pinned the following prior messages as core context for this query:\n"
+        pinned_context_str = "\n[CRITICAL PINNED CONTEXT START]\n"
+        pinned_context_str += "The user has explicitly pinned the following prior messages as the PRIMARY context for this response:\n"
         for pc in pinned_contexts:
-            pinned_context_str += f"- {pc}\n"
-        pinned_context_str += "\nUse this pinned context prominently to guide your answer.\n\n"
+            pinned_context_str += f"📍 PINNED REFERENCE: \"{pc}\"\n"
+        pinned_context_str += "\nINSTRUCTION: Prioritize the information above. If the recent conversation history diverges from this pinned context, follow the pinned context.\n"
+        pinned_context_str += "[CRITICAL PINNED CONTEXT END]\n\n"
 
     if has_local_data:
         # ✅ Found relevant local chunks
@@ -183,80 +243,117 @@ def answer_query(query, chat_history=None, level="standard", mode="standard", st
         --------------------
         {retrieved_docs}
         """
-    else:
-        # Step 3: If no local data or no docs yet, decide what to do
-        if docs_exist:
-            print("🌐 No relevant local data found. Searching the web...\n")
-            
-            search_results = []
+    # Step 3: Web Search and Token Generation
+    web_sources = []
+    def main_gen():
+        nonlocal web_sources
+        search_results = []
+        # Trigger search if specifically requested OR if our auto-detection flagged it
+        should_search_web = web_search or auto_web_search
+        
+        if should_search_web:
+            status_msg = f"ddgs search --query \"{query}\""
+            if stream:
+                yield {"status": status_msg, "type": "tool_start"}
+            else:
+                print(f"🌐 {status_msg}")
+                
             try:
-                if len(query.split()) > 2:
+                if len(query.split()) > 1:
                     with DDGS() as ddgs:
                         for r in ddgs.text(query, max_results=5):
                             search_results.append(f"{r['title']}: {r['body']} ({r['href']})")
+                            web_sources.append(r['href'])
             except Exception as e:
                 print("⚠️ Web search failed:", e)
-                search_results = []
 
-            if search_results:
-                system_prompt = f"""
-                You are Intellectra, a world-class AI tutor.
-                (Internal Note: You are currently running on the '{model_name}' model. If the user asks which model you are, explicitly state this model name.)
-                {level_instruction}
-                
-                {pinned_context_str}
-                No relevant uploaded documents found, so use these web results to help:
-                --------------------
-                {search_results}
-                """
-            else:
-                system_prompt = f"""
-                You are Intellectra, a friendly and concise AI tutor.
-                (Internal Note: You are currently running on the '{model_name}' model. If the user asks which model you are, explicitly state this model name.)
-                {level_instruction}
-                
-                {pinned_context_str}
-                Respond naturally using your own general knowledge.
-                """
+            if stream and search_results:
+                yield {"status": f"Found {len(search_results)} relevant web sources for your query.", "type": "tool_output"}
+                # Send the links to the UI immediately
+                yield {"sources": web_sources}
 
-        else:
-            # ✅ No documents at all — act as a normal tutor
-            system_prompt = f"""
-            You are Intellectra, a world-class AI tutor.
-            (Internal Note: You are currently running on the '{model_name}' model. If the user asks which model you are, explicitly state this model name.)
+        # Step 4: System Prompt Construction
+        current_system_prompt = ""
+        if has_local_data:
+            current_system_prompt = f"""
+            You are Intellectra, a world-class AI tutor. 
+            (Internal Note: You are currently running on the '{model_name}' model.)
             {level_instruction}
             
             {pinned_context_str}
-            No documents have been uploaded yet. Respond naturally and helpfully using your knowledge.
+            Use the following document segments to answer accurately. 
+            --------------------
+            {retrieved_docs}
+            """
+            if search_results:
+                current_system_prompt += f"\n\nAlso consider these recent web results:\n{search_results}"
+        elif search_results:
+            current_system_prompt = f"""
+            You are Intellectra, a world-class AI tutor.
+            (Internal Note: You are currently running on the '{model_name}' model.)
+            {level_instruction}
+            
+            {pinned_context_str}
+            I searched the web to help answer your question. Use these results:
+            --------------------
+            {search_results}
+            """
+        else:
+            current_system_prompt = f"""
+            You are Intellectra, a friendly and concise AI tutor.
+            (Internal Note: You are currently running on the '{model_name}' model.)
+            {level_instruction}
+            
+            {pinned_context_str}
+            Respond naturally using your own general knowledge.
             """
 
-    # Step 4: Generate response using NVIDIA model
-    messages_to_send = [SystemMessage(content=system_prompt)]
-    if chat_history:
-        for msg in chat_history[-10:]:
-            if msg["sender"] == "user":
-                messages_to_send.append(HumanMessage(content=msg["text"]))
-            elif msg["sender"] == "ai":
-                messages_to_send.append(AIMessage(content=msg["text"]))
-    
-    messages_to_send.append(HumanMessage(content=query))
-    
+        # Step 5: Final Message Construction
+        final_messages = [SystemMessage(content=current_system_prompt)]
+        if chat_history:
+            for msg in chat_history[-10:]:
+                if msg["sender"] == "user":
+                    final_messages.append(HumanMessage(content=msg["text"]))
+                elif msg["sender"] == "ai":
+                    final_messages.append(AIMessage(content=msg["text"]))
+        
+        # Merge pins directly into the query so it's impossible to ignore
+        effective_query = query
+        if pinned_context_str:
+            effective_query = f"PLEASE REFERENCE THE FOLLOWING PINNED CONTEXT FOR THIS QUESTION:\n{pinned_context_str}\n\nUSER QUESTION: {query}"
+            
+        # FORCE math formatting at the very end of the prompt
+        effective_query += "\n\n" + global_formatting
+            
+        final_messages.append(HumanMessage(content=effective_query))
+
+        if stream:
+            for chunk in current_llm.stream(final_messages):
+                yield chunk
+        else:
+            response = current_llm.invoke(final_messages)
+            yield response.content
+
     # Extract sources if they exist (need them for both stream and non-stream)
     sources = []
-    if has_local_data:
+    if has_local_data and valid_metas:
         try:
-            metas = results.get("metadatas", [])
-            if metas:
-                sources = list(set([m["source"] for m in metas[0] if "source" in m]))
+            sources = list(set([m["source"] for m in valid_metas if "source" in m]))
         except Exception:
             sources = []
+            
+    # Combine with web sources
+    if web_sources:
+        sources.extend(list(set(web_sources)))
 
     if stream:
-        return current_llm.stream(messages_to_send), sources
+        return main_gen(), sources
     else:
-        response = current_llm.invoke(messages_to_send)
+        # For non-stream, we just get the first yielded item (the full response)
+        g = main_gen()
+        res = next(g)
         return {
-            "response": response.content,
+            "response": res,
             "sources": sources
         }
 
@@ -377,6 +474,7 @@ def generate_concept_questions(text):
     system_prompt = """
     You are an AI tutor designed to assess a student's understanding of a specific concept.
     Based on the provided text, generate 3 open-ended diagnostic questions that will help gauge how well the user truly understands the core ideas.
+    IMPORTANT: If you see a block marked '[CRITICAL PINNED CONTEXT]', prioritize that information as the primary subject matter for your questions.
     Avoid simple yes/no questions. Ask "why" or "how" questions that require a short explanation.
     You MUST output valid JSON only. Do not wrap it in markdown code blocks.
     The JSON structure MUST be an array of strings, like this:
@@ -420,19 +518,27 @@ def generate_concept_questions(text):
 # Helper: Concept Check Evaluation
 # ----------------------------
 def evaluate_concept_answers(questions, answers, original_text):
+    # If the user submitted completely blank answers, bypass the LLM to prevent hallucinations.
+    if all(not str(a).strip() for a in answers):
+        return "It looks like you didn't provide any answers to the concept check! If you're unsure about this topic, just say so and I'll be happy to break it down and explain it to you."
+
     system_prompt = """
     You are an expert AI tutor. The user was learning about a concept and I asked them a few diagnostic questions.
     I will provide the original text they read, the questions asked, and their answers.
     Your task is to:
     1. Briefly acknowledge their effort.
-    2. Provide a SHORT, simple evaluation of what they know and what they don't know based on their answers (e.g., "You have a good grasp of X, but you missed Y.").
-    3. Conclude by explicitly asking: "If you want me to explain this concept according to this evaluation, just say so, or tell me 'I already know that'."
+    2. Provide a SHORT, simple evaluation of what they know and what they don't know based on their answers.
+    3. CRITICAL: If a user's answer is blank, empty, or says "I don't know", you MUST state that they skipped or missed that part of the concept. Do NOT pretend they answered it correctly.
+    4. Conclude by explicitly asking: "If you want me to explain this concept according to this evaluation, just say so, or tell me 'I already know that'."
     DO NOT provide the full explanation yet. Keep it concise.
     """
     
     q_and_a = ""
     for idx, (q, a) in enumerate(zip(questions, answers)):
-        q_and_a += f"Q{idx+1}: {q}\nUser's Answer: {a}\n\n"
+        user_ans = str(a).strip()
+        if not user_ans:
+            user_ans = "[NO ANSWER PROVIDED]"
+        q_and_a += f"Q{idx+1}: {q}\nUser's Answer: {user_ans}\n\n"
         
     prompt = f"""
     ORIGINAL CONCEPT TEXT:

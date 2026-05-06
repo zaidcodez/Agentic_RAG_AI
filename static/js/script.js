@@ -95,27 +95,22 @@ plusBtn.addEventListener("click", () => {
     hiddenTools.classList.toggle("show");
 });
 
+let lastModeToggleTime = 0;
 modeSelectBtn.addEventListener("click", () => {
-    if (isGenerating) return; // Prevent switching while generating
-    
-    const oldItem = modeTextWrapper.querySelector(".mode-text-item");
-    const nextMode = isThinkingMode ? "Standard" : "Thinking";
-    
-    // Animate out
-    oldItem.classList.add("slide-out");
-    
-    // Create and animate in
-    const newItem = document.createElement("span");
-    newItem.className = "mode-text-item slide-in";
-    newItem.innerText = nextMode;
-    modeTextWrapper.appendChild(newItem);
+    if (isGenerating) return;
     
     isThinkingMode = !isThinkingMode;
     
-    setTimeout(() => {
-        oldItem.remove();
-        newItem.classList.remove("slide-in");
-    }, 400);
+    const standardSpan = document.getElementById("mode-standard");
+    const thinkingSpan = document.getElementById("mode-thinking");
+    
+    if (isThinkingMode) {
+        standardSpan.classList.remove("active");
+        thinkingSpan.classList.add("active");
+    } else {
+        thinkingSpan.classList.remove("active");
+        standardSpan.classList.add("active");
+    }
 });
 
 // Session persistence via localStorage
@@ -127,43 +122,8 @@ function saveCurrentSession() {
     }
 }
 
-// Configure Marked.js with Highlight.js
-marked.setOptions({
-    highlight: function(code, lang) {
-        if (lang && hljs.getLanguage(lang)) {
-            return hljs.highlight(code, { language: lang }).value;
-        }
-        return hljs.highlightAuto(code).value;
-    },
-    breaks: true
-});
+// Removed legacy marked.js configuration
 
-// Custom renderer to wrap code blocks with header + copy button
-const renderer = new marked.Renderer();
-renderer.code = function(codeObj) {
-    // marked v14+ passes an object { text, lang, escaped }
-    const code = typeof codeObj === 'object' ? codeObj.text : codeObj;
-    const lang = typeof codeObj === 'object' ? (codeObj.lang || '') : (arguments[1] || '');
-    
-    const langLabel = lang || 'code';
-    let highlighted;
-    if (lang && hljs.getLanguage(lang)) {
-        highlighted = hljs.highlight(code, { language: lang }).value;
-    } else {
-        highlighted = hljs.highlightAuto(code).value;
-    }
-    return `<div class="code-block-wrapper">
-        <div class="code-block-header">
-            <span class="code-block-lang">${langLabel}</span>
-            <button class="code-copy-btn" onclick="copyCodeBlock(this)">
-                <i class="ri-file-copy-line"></i> Copy
-            </button>
-        </div>
-        <pre><code class="hljs language-${lang}">${highlighted}</code></pre>
-    </div>`;
-};
-
-marked.use({ renderer });
 
 // Copy code to clipboard
 function copyCodeBlock(btn) {
@@ -278,64 +238,120 @@ function createTypingIndicator() {
     return wrapper;
 }
 
-// Robust Markdown + Math Renderer
-function renderMarkdownWithMath(text) {
-    const mathBlocks = [];
-    let processedText = text;
-
-    // Helper to safely store math blocks and replace with a placeholder
-    const storeMath = (match, mathContent, displayMode) => {
-        const id = `MATHBLOCKPLACEHOLDER${mathBlocks.length}ENDMATH`;
-        mathBlocks.push({ id, tex: mathContent, displayMode });
-        return id;
+// Professional Markdown-it Renderer (safe — fallback if CDN fails)
+let md;
+try {
+    if (typeof window.markdownit === 'function') {
+        md = window.markdownit({
+            html: false,
+            linkify: true,
+            typographer: true,
+            breaks: true,
+            highlight: function (str, lang) {
+                let highlighted;
+                if (lang && hljs.getLanguage(lang)) {
+                    try {
+                        highlighted = hljs.highlight(str, { language: lang, ignoreIllegals: true }).value;
+                    } catch (__) {}
+                }
+                if (!highlighted) {
+                    try {
+                        highlighted = hljs.highlightAuto(str).value;
+                    } catch (__) {}
+                }
+                if (!highlighted) {
+                    highlighted = md.utils.escapeHtml(str); // Fallback
+                }
+                const langLabel = lang || 'code';
+                return `<div class="code-block-wrapper">
+                    <div class="code-block-header">
+                        <span class="code-block-lang">${langLabel}</span>
+                        <button class="code-copy-btn" onclick="copyCodeBlock(this)">
+                            <i class="ri-file-copy-line"></i> Copy
+                        </button>
+                    </div>
+                    <pre><code class="hljs language-${lang}">${highlighted}</code></pre>
+                </div>`;
+            }
+        });
+    } else {
+        throw new Error('not loaded');
+    }
+} catch(e) {
+    // Minimal fallback renderer
+    md = {
+        render: (text) => {
+            return '<p>' + text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/\n\n/g, '</p><p>')
+                .replace(/\n/g, '<br>') + '</p>';
+        }
     };
+}
 
-    // 1. Extract block math: $$ ... $$
-    processedText = processedText.replace(/\$\$([\s\S]*?)\$\$/g, (m, p1) => storeMath(m, p1, true));
+function renderMarkdownWithMath(text) {
+    if (!text) return "";
+    let processedText = String(text);
+
+    // 1. Extract Math to protect it from Markdown-it mangling underscores (_) and asterisks (*)
+    const mathBlocks = [];
     
-    // 2. Extract block math: \[ ... \]
-    processedText = processedText.replace(/\\\[([\s\S]*?)\\\]/g, (m, p1) => storeMath(m, p1, true));
+    // Match display math $$...$$ or \[...\]
+    processedText = processedText.replace(/(\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\])/g, (match) => {
+        mathBlocks.push(match);
+        return `@@MATH_BLOCK_${mathBlocks.length - 1}@@`;
+    });
     
-    // 3. Extract inline math: \( ... \)
-    processedText = processedText.replace(/\\\(([\s\S]*?)\\\)/g, (m, p1) => storeMath(m, p1, false));
-
-    // 4. FALLBACK: Catch LLM responses that output [ ... ] or ( ... ) containing math 
-    // without properly escaping them as \[ ... \]
-    processedText = processedText.replace(/\[([\s\S]{1,500}?)\]/g, (m, p1) => {
-        if (p1.includes('\\int') || p1.includes('\\frac') || p1.includes('\\sum') || p1.includes('\\begin') || p1.includes('^')) {
-            return storeMath(m, p1, true);
-        }
-        return m;
+    // Match inline math $...$ or \(...\)
+    processedText = processedText.replace(/(\$(?!\$)[^$]+\$|\\\([\s\S]+?\\\))/g, (match) => {
+        mathBlocks.push(match);
+        return `@@MATH_INLINE_${mathBlocks.length - 1}@@`;
     });
 
-    processedText = processedText.replace(/\(([\s\S]{1,200}?)\)/g, (m, p1) => {
-        if (p1.includes('\\displaystyle') || p1.includes('\\int') || p1.includes('\\frac')) {
-            return storeMath(m, p1, false);
-        }
-        return m;
-    });
+    // 2. Render Markdown using Markdown-it
+    let html = "";
+    try {
+        html = md.render(processedText);
+    } catch(e) {
+        console.error("Markdown render error:", e);
+        html = processedText;
+    }
 
-    // Parse Markdown safely (Markdown won't destroy our ___MATH_x___ placeholders)
-    let html = marked.parse(processedText);
+    // 3. Restore Math
+    html = html.replace(/@@MATH_BLOCK_(\d+)@@/g, (match, i) => mathBlocks[i]);
+    html = html.replace(/@@MATH_INLINE_(\d+)@@/g, (match, i) => mathBlocks[i]);
 
-    // Re-inject rendered math
-    mathBlocks.forEach(block => {
-        try {
-            const rendered = katex.renderToString(block.tex, {
-                displayMode: block.displayMode,
-                throwOnError: false
-            });
-            html = html.replace(block.id, rendered);
-        } catch (e) {
-            console.error("KaTeX Error:", e);
-            html = html.replace(block.id, block.tex); // fallback to raw text if error
-        }
-    });
+    return `<div class="markdown-body">${html}</div>`;
+}
 
-    return html;
+// KaTeX Auto-Render: call this on a DOM element AFTER inserting HTML
+function renderMathInEl(el) {
+    if (!el || !window.renderMathInElement) return;
+    try {
+        renderMathInElement(el, {
+            delimiters: [
+                {left: '$$', right: '$$', display: true},
+                {left: '\\[', right: '\\]', display: true},
+                {left: '\\(', right: '\\)', display: false},
+                {left: '$', right: '$', display: false}
+            ],
+            throwOnError: false,
+            ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        });
+    } catch(e) {
+        console.warn('KaTeX auto-render error:', e);
+    }
 }
 
 function appendMessage(text, sender, sources = [], messageId = null, widgets = []) {
+    text = text || "";
+    text = String(text);
+    widgets = widgets || [];
+    
     const wrapper = document.createElement("div");
     wrapper.className = `msg-wrapper ${sender}`;
     
@@ -476,6 +492,12 @@ function appendMessage(text, sender, sources = [], messageId = null, widgets = [
     
     messagesDiv.appendChild(wrapper);
     messagesDiv.scrollTo({ top: messagesDiv.scrollHeight, behavior: 'smooth' });
+
+    // Render math in the newly inserted bubble
+    if (sender === 'ai') {
+        const bubble = document.getElementById(bubbleId);
+        if (bubble) renderMathInEl(bubble);
+    }
 
     // Render saved widgets if any
     if (sender === 'ai') {
@@ -1020,6 +1042,9 @@ window.renderConceptCheck = function(questions, container, currentIndex = 0, wid
                     </div>
                 </div>
             `;
+            // Ensure dataset state is locked to Review Mode so Re-review doesn't revert to Edit Mode
+            container.dataset.isReviewMode = "true";
+            container.dataset.userAnswers = JSON.stringify(userAnswers);
             return;
         }
         // Transition from answering to review mode
@@ -1407,14 +1432,47 @@ function createAiStreamContainer() {
     wrapper.className = "msg-wrapper ai";
     const bubbleId = `bubble-${Math.random().toString(36).substring(2, 9)}`;
     wrapper.innerHTML = `
-        <div class="sender-name"><i class="ri-flashlight-fill"></i> Intellectra</div>
+        <div class="msg-header">
+            <div class="msg-name"><i class="ri-sparkling-2-line"></i> Intellectra</div>
+            <button class="copy-bubble-btn" onclick="copyToClipboard('${bubbleId}')" title="Copy Message"><i class="ri-file-copy-line"></i></button>
+        </div>
         <div class="msg-bubble" id="${bubbleId}">
+            <div class="status-container"></div>
             <div class="stream-content"></div>
             <div class="sources-placeholder"></div>
         </div>
     `;
     return { wrapper, bubbleId };
 }
+
+window.showStatusTerminal = function(bubbleId, text) {
+    const bubble = document.getElementById(bubbleId);
+    if (!bubble) return;
+    const statusContainer = bubble.querySelector(".status-container");
+    
+    const terminal = document.createElement("div");
+    terminal.className = "status-terminal";
+    terminal.innerHTML = `
+        <div class="status-line">
+            <span class="status-prompt">$</span>
+            <span class="status-text">${text}</span>
+            <span class="status-cursor"></span>
+        </div>
+        <div class="tool-output" style="display:none;"></div>
+    `;
+    statusContainer.appendChild(terminal);
+    messagesDiv.scrollTo({ top: messagesDiv.scrollHeight, behavior: 'smooth' });
+};
+
+window.updateStatusTerminal = function(bubbleId, output) {
+    const bubble = document.getElementById(bubbleId);
+    if (!bubble) return;
+    const toolOutput = bubble.querySelector(".tool-output");
+    if (toolOutput) {
+        toolOutput.style.display = "block";
+        toolOutput.innerHTML = `<i class="ri-terminal-box-line"></i> ${output}`;
+    }
+};
 
 // Update the streaming content
 function updateStreamContent(bubbleId, text, sources = []) {
@@ -1423,9 +1481,9 @@ function updateStreamContent(bubbleId, text, sources = []) {
     const contentDiv = bubble.querySelector(".stream-content");
     const sourcesDiv = bubble.querySelector(".sources-placeholder");
     
-    // During streaming, dynamically render Markdown so formatting is live
     contentDiv.innerHTML = renderMarkdownWithMath(text);
-    
+    renderMathInEl(contentDiv);
+
     if (sources && sources.length > 0 && sourcesDiv.innerHTML === "") {
         sourcesDiv.innerHTML = `<div class="sources-container">
             <div class="sources-title">Sources:</div>
@@ -1439,8 +1497,8 @@ function finalizeStreamContent(bubbleId, text, sources, messageId) {
     const bubble = document.getElementById(bubbleId);
     if (!bubble) return;
     
-    // Apply full formatting
-    const formattedHtml = renderMarkdownWithMath(text);
+    // Render markdown + math
+    const renderedHtml = renderMarkdownWithMath(text);
     
     let sourcesHtml = "";
     if (sources && sources.length > 0) {
@@ -1487,7 +1545,10 @@ function finalizeStreamContent(bubbleId, text, sources, messageId) {
         `;
     }
 
-    bubble.innerHTML = `${formattedHtml}${sourcesHtml}${actionsHtml}`;
+    bubble.innerHTML = `<div class="stream-content">${renderedHtml}</div>${sourcesHtml}${actionsHtml}`;
+    
+    // Final math render on the completed bubble
+    renderMathInEl(bubble);
 }
 
 // Send Message (Streaming Version)
@@ -1510,8 +1571,21 @@ async function sendMessage(retryText = null) {
     
     queryInput.value = "";
     queryInput.style.height = 'auto';
-    // Remove queryInput.disabled so user can draft next message
-    // queryInput.placeholder = "Message Intellectra...";
+    
+    // Disable any active Concept Check forms since the user is moving on to a new query
+    document.querySelectorAll('.quiz-container .submit-btn').forEach(btn => {
+        btn.disabled = true;
+        btn.innerHTML = `Abandoned <i class="ri-close-circle-line"></i>`;
+        btn.style.opacity = "0.6";
+        btn.onclick = null;
+        btn.classList.remove('submit-btn'); // Prevent it from being selected again
+    });
+    
+    const pinsToSend = pinnedContexts.map(p => p.text);
+    
+    // Clear pins from UI immediately for better UX
+    pinnedContexts = [];
+    renderPinnedContexts();
     
     isGenerating = true;
     sendBtn.innerHTML = '<i class="ri-stop-mini-fill"></i>';
@@ -1537,8 +1611,9 @@ async function sendMessage(retryText = null) {
                 level: currentStudyLevel,
                 mode: isThinkingMode ? "thinking" : "standard",
                 stream: true,
-                is_concept_check: document.getElementById('conceptCheckToggle') ? document.getElementById('conceptCheckToggle').checked : false,
-                pinned_contexts: pinnedContexts.map(p => p.text)
+                is_concept_check: isConceptCheck,
+                web_search: document.getElementById('webSearchToggle')?.checked || false,
+                pinned_contexts: pinsToSend,
             })
         });
 
@@ -1575,12 +1650,31 @@ async function sendMessage(retryText = null) {
                                 sessionTitle.textContent = "Current Session";
                             }
                         }
-                        if (data.sources) sources = data.sources;
+                        if (data.sources) {
+                            // Merge new sources with existing ones
+                            sources = [...new Set([...sources, ...data.sources])];
+                            if (streamInfo) {
+                                updateStreamContent(streamInfo.bubbleId, fullResponse, sources);
+                            }
+                        }
                         
                         if (data.error) {
                             throw new Error(data.error); // Re-throw to be caught outside
                         }
                         
+                        if (data.status) {
+                            if (!streamInfo) {
+                                typingIndicator.remove();
+                                streamInfo = createAiStreamContainer();
+                                messagesDiv.appendChild(streamInfo.wrapper);
+                            }
+                            if (data.type === 'tool_start') {
+                                showStatusTerminal(streamInfo.bubbleId, data.status);
+                            } else if (data.type === 'tool_output') {
+                                updateStatusTerminal(streamInfo.bubbleId, data.status);
+                            }
+                        }
+
                         if (data.token) {
                             if (!streamInfo) {
                                 typingIndicator.remove();

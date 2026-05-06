@@ -21,6 +21,64 @@
     --brand-gradient: linear-gradient(to right, #fff, #94a3b8);
 }
 
+/* GitHub Markdown Dark Mode Fix */
+.markdown-body {
+    background-color: transparent !important;
+    color: var(--text-main) !important;
+    font-family: inherit !important;
+    font-size: inherit !important;
+    line-height: 1.7 !important;
+}
+.markdown-body p {
+    margin-bottom: 1rem !important;
+}
+.markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4, .markdown-body h5, .markdown-body h6 {
+    color: var(--text-main) !important;
+    border-bottom: none !important;
+    margin-top: 1.2em !important;
+    margin-bottom: 0.6em !important;
+}
+.markdown-body code {
+    background-color: rgba(255,255,255,0.05) !important;
+    color: #f87171 !important;
+    padding: 0.2em 0.4em !important;
+    border-radius: 4px !important;
+    font-size: 0.9em !important;
+}
+.markdown-body pre {
+    background-color: #0d1117 !important;
+    border-radius: 8px !important;
+    padding: 16px !important;
+}
+.markdown-body blockquote {
+    color: var(--text-muted) !important;
+    border-left: 0.25em solid var(--primary-accent) !important;
+}
+.markdown-body ul, .markdown-body ol {
+    padding-left: 2em !important;
+    margin-bottom: 1rem !important;
+}
+.markdown-body li {
+    margin-bottom: 0.3em !important;
+}
+.markdown-body strong {
+    color: var(--text-main) !important;
+    font-weight: 600 !important;
+}
+
+/* KaTeX Display Math Styling */
+.katex-display {
+    margin: 1.5em 0 !important;
+    padding: 12px 16px !important;
+    background: rgba(255,255,255,0.02);
+    border-radius: 8px;
+    border-left: 3px solid var(--primary-accent);
+    overflow-x: auto;
+}
+.katex {
+    font-size: 1.1em !important;
+}
+
 [data-theme="light"] {
     --bg-color: #f1f5f9;
     --sidebar-bg: #ffffff;
